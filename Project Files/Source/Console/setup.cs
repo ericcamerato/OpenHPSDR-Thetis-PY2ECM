@@ -24054,6 +24054,13 @@ namespace Thetis
             nud40M.Value = (decimal)p.GetGainForBand(Band.B40M);
             nud30M.Value = (decimal)p.GetGainForBand(Band.B30M);
             nud20M.Value = (decimal)p.GetGainForBand(Band.B20M);
+            nud25M.Value = (decimal)p.GetGainForBand(Band.B25M);
+            nud22M.Value = (decimal)p.GetGainForBand(Band.B22M);
+            nud19M.Value = (decimal)p.GetGainForBand(Band.B19M);
+            nud16M.Value = (decimal)p.GetGainForBand(Band.B16M);
+            nud14M.Value = (decimal)p.GetGainForBand(Band.B14M);
+            nud13M.Value = (decimal)p.GetGainForBand(Band.B13M);
+            nud11M.Value = (decimal)p.GetGainForBand(Band.B11M);
             nud17M.Value = (decimal)p.GetGainForBand(Band.B17M);
             nud15M.Value = (decimal)p.GetGainForBand(Band.B15M);
             nud12M.Value = (decimal)p.GetGainForBand(Band.B12M);
@@ -24262,22 +24269,36 @@ namespace Thetis
             //nud160M
             //nudVHF0
 
-            bool bVHF = nud.Name.StartsWith("nudVHF");
-            int nNumber = bVHF ? int.Parse(nud.Name.Substring(6)) : int.Parse(nud.Name.Substring(3, nud.Name.Length - 4));
-
             PAProfile p = getPAProfile(comboPAProfile.Text);
             if (p == null) return;
 
-            Band b;
-            if (bVHF)
-                b = (Band)((int)Band.VHF0 + nNumber);
-            else
-                b = (Band)((int)Band.B160M + mapBandMetersToIndex(nNumber));
+            Band b = getBandForPAGainControl(nud);
+            if (b == Band.FIRST) return;
 
             float fOld = p.GetGainForBand(b);
             p.SetGainForBand(b, (float)nud.Value);
 
             if (p.GetGainForBand(b) != fOld) console.PWR = console.PWR; // update the power, which causes these gain values to be queried
+        }
+        private Band getBandForPAGainControl(NumericUpDownTS nud)
+        {
+            if (nud == null) return Band.FIRST;
+            if (nud.Name.StartsWith("nudVHF"))
+                return (Band)((int)Band.VHF0 + int.Parse(nud.Name.Substring(6)));
+
+            switch (nud.Name)
+            {
+                case "nud25M": return Band.B25M;
+                case "nud22M": return Band.B22M;
+                case "nud19M": return Band.B19M;
+                case "nud16M": return Band.B16M;
+                case "nud14M": return Band.B14M;
+                case "nud13M": return Band.B13M;
+                case "nud11M": return Band.B11M;
+            }
+
+            int nMeters = int.Parse(nud.Name.Substring(3, nud.Name.Length - 4));
+            return (Band)((int)Band.B160M + mapBandMetersToIndex(nMeters));
         }
         public float GetPAGain(Band b, int nDriveValue)
         {
@@ -24813,6 +24834,7 @@ namespace Thetis
         }
         public class PAProfile
         {
+            private const string INTERMEDIATE_PA_GAINS_VERSION = "IntermediatePAGainsV1";
             private string _sName = "";
             private HPSDRModel _model;
             private bool _default;
@@ -24886,7 +24908,9 @@ namespace Thetis
             public void DataFromString(string sData)
             {
                 string[] sSplit = sData.Split('|');
-                if ((sSplit.Length == (int)Band.LAST + 3) || (sSplit.Length == (int)Band.LAST + 3 + 378) || (sSplit.Length == (int)Band.LAST + 3 + 378 + 84))
+                bool hasIndependentIntermediateGains = sSplit[sSplit.Length - 1] == INTERMEDIATE_PA_GAINS_VERSION;
+                int dataLength = hasIndependentIntermediateGains ? sSplit.Length - 1 : sSplit.Length;
+                if ((dataLength == (int)Band.LAST + 3) || (dataLength == (int)Band.LAST + 3 + 378) || (dataLength == (int)Band.LAST + 3 + 378 + 84))
                 // + 3 = 3 initial settings
                 // + 378 = the new offsets
                 // + 84 = the new max power and in use
@@ -24930,6 +24954,11 @@ namespace Thetis
                             }
                         }
                     }
+
+                    // Profiles written before the intermediate PA bands had controls used
+                    // the adjacent amateur band. Preserve that behaviour on first load.
+                    if (!hasIndependentIntermediateGains)
+                        SetIntermediateGainsFromAdjacentBands();
                 }
             }
             public string DataToString()
@@ -24958,9 +24987,19 @@ namespace Thetis
                     sData += _maxPower[n].ToString("0.0") + "|";
                 }
 
-                sData = sData.TrimEnd('|');
+                sData += INTERMEDIATE_PA_GAINS_VERSION;
 
                 return sData;
+            }
+            private void SetIntermediateGainsFromAdjacentBands()
+            {
+                _gainValues[(int)Band.B25M] = _gainValues[(int)Band.B20M];
+                _gainValues[(int)Band.B22M] = _gainValues[(int)Band.B20M];
+                _gainValues[(int)Band.B19M] = _gainValues[(int)Band.B17M];
+                _gainValues[(int)Band.B16M] = _gainValues[(int)Band.B17M];
+                _gainValues[(int)Band.B14M] = _gainValues[(int)Band.B15M];
+                _gainValues[(int)Band.B13M] = _gainValues[(int)Band.B12M];
+                _gainValues[(int)Band.B11M] = _gainValues[(int)Band.B10M];
             }
             public float GetGainForBand(Band b, int nDriveValue = -1)
             {
@@ -25094,6 +25133,7 @@ namespace Thetis
 
                     SetGainForBand((Band)n, pa_default_gains[n]);
                 }
+                SetIntermediateGainsFromAdjacentBands();
             }
         }
         private void enabledPAAdjust(bool bEnabled)
@@ -25120,13 +25160,8 @@ namespace Thetis
                 {
                     if (c.Name.StartsWith("nud"))
                     {
-                        bool bVHF = nud.Name.StartsWith("nudVHF");
-                        int nNumber = bVHF ? int.Parse(nud.Name.Substring(6)) : int.Parse(nud.Name.Substring(3, nud.Name.Length - 4));
-                        Band b;
-                        if (bVHF)
-                            b = (Band)((int)Band.VHF0 + nNumber);
-                        else
-                            b = (Band)((int)Band.B160M + mapBandMetersToIndex(nNumber));
+                        Band b = getBandForPAGainControl(nud);
+                        if (b == Band.FIRST) continue;
 
                         if (!bEnabled)
                         {
