@@ -6593,6 +6593,11 @@ namespace Thetis
             }
         }
 
+        public Band GetPAGainBandForCurrentTX()
+        {
+            return GetPAGainBand(TXBand);
+        }
+
         public void CheckSelectedButtonColor()
         {
             // used when changing the background color of selected buttons

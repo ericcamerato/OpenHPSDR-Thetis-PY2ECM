@@ -20473,6 +20473,13 @@ namespace Thetis
                     nud40M.Minimum = 0;
                     nud30M.Minimum = 0;
                     nud20M.Minimum = 0;
+                    nud25M.Minimum = 0;
+                    nud22M.Minimum = 0;
+                    nud19M.Minimum = 0;
+                    nud16M.Minimum = 0;
+                    nud14M.Minimum = 0;
+                    nud13M.Minimum = 0;
+                    nud11M.Minimum = 0;
                     nud17M.Minimum = 0;
                     nud15M.Minimum = 0;
                     nud12M.Minimum = 0;
@@ -20484,6 +20491,13 @@ namespace Thetis
                     nud40M.Increment = 1;
                     nud30M.Increment = 1;
                     nud20M.Increment = 1;
+                    nud25M.Increment = 1;
+                    nud22M.Increment = 1;
+                    nud19M.Increment = 1;
+                    nud16M.Increment = 1;
+                    nud14M.Increment = 1;
+                    nud13M.Increment = 1;
+                    nud11M.Increment = 1;
                     nud17M.Increment = 1;
                     nud15M.Increment = 1;
                     nud12M.Increment = 1;
@@ -20495,6 +20509,13 @@ namespace Thetis
                     nud40M.DecimalPlaces = 0;
                     nud30M.DecimalPlaces = 0;
                     nud20M.DecimalPlaces = 0;
+                    nud25M.DecimalPlaces = 0;
+                    nud22M.DecimalPlaces = 0;
+                    nud19M.DecimalPlaces = 0;
+                    nud16M.DecimalPlaces = 0;
+                    nud14M.DecimalPlaces = 0;
+                    nud13M.DecimalPlaces = 0;
+                    nud11M.DecimalPlaces = 0;
                     nud17M.DecimalPlaces = 0;
                     nud15M.DecimalPlaces = 0;
                     nud12M.DecimalPlaces = 0;
@@ -24794,13 +24815,16 @@ namespace Thetis
             PAProfileEnableControls(newMox);
 
             if (newMox)
+            {
+                setAdjustingBand(console.GetPAGainBandForCurrentTX());
                 enabledAllPAnuds(false);
+            }
             else
                 enabledAllPAnuds(true);
         }
         private void OnTXBandChanged(Band oldBand, Band newBand, double tx_frequency)
         {
-            setAdjustingBand(newBand);
+            setAdjustingBand(console.GetPAGainBandForCurrentTX());
             lblTXattBand.Text = newBand.ToString(); //[2.3.10.6]MW0LGE added (also in ATTOnTX)
         }
         private void setAdjustingBand(Band b)
@@ -24811,7 +24835,9 @@ namespace Thetis
                 if (sBand.StartsWith("B")) sBand = sBand.Remove(0, 1);
             }
 
-            if (!((b >= Band.B160M && b <= Band.B6M) || (b >= Band.VHF0 && b <= Band.VHF13)))
+            if (!((b >= Band.B160M && b <= Band.B6M) ||
+                  (b >= Band.VHF0 && b <= Band.VHF13) ||
+                  (b >= Band.B25M && b <= Band.B11M)))
             {
                 _adjustingBand = Band.FIRST; // MW0LGE_[2.9.0.7] reset
                 enabledPAAdjust(false);
