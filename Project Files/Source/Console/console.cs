@@ -6569,6 +6569,30 @@ namespace Thetis
             return SetupForm.GetPAGain(b, nDriveValue);
         }
 
+        // Keep TXBand mapped to the neighbouring amateur band for filters, antennas,
+        // limits and other existing consumers, but select PA gain from the actual
+        // extended-frequency segment (for example 25-28 MHz uses B11M).
+        private Band GetPAGainBand(Band fallbackBand)
+        {
+            if (HardwareSpecific.Model != HPSDRModel.HERMESLITE || !extended || tx_xvtr_index >= 0)
+                return fallbackBand;
+
+            Band frequencyBand = BandByFreq(TXFreq, -1, current_region);
+            switch (frequencyBand)
+            {
+                case Band.B25M:
+                case Band.B22M:
+                case Band.B19M:
+                case Band.B16M:
+                case Band.B14M:
+                case Band.B13M:
+                case Band.B11M:
+                    return frequencyBand;
+                default:
+                    return fallbackBand;
+            }
+        }
+
         public void CheckSelectedButtonColor()
         {
             // used when changing the background color of selected buttons
@@ -47828,7 +47852,7 @@ namespace Thetis
             }
             else
             {
-                gbb = GainByBand(TXBand, new_pwr);
+                gbb = GainByBand(GetPAGainBand(TXBand), new_pwr);
             }
             target_dbm -= gbb;
 
