@@ -2859,6 +2859,8 @@ namespace Thetis
 
             a.Add("nr_selected/" + nr_selected_to_text());
             a.Add("nr_selected_by_mode/" + nr_selected_by_mode_to_text());
+            a.Add("agc_selected_by_mode/" + agc_selected_by_mode_to_text());
+            a.Add("anf_selected_by_mode/" + anf_selected_by_mode_to_text());
 
             a.Add("chkNB_checkstate/" + chkNB.CheckState.ToString());
             a.Add("chkRX2NB_checkstate/" + chkRX2NB.CheckState.ToString());
@@ -5058,6 +5060,12 @@ namespace Thetis
                         break;
                     case "nr_selected_by_mode":
                         nr_selected_by_mode_from_text(val);
+                        break;
+                    case "agc_selected_by_mode":
+                        agc_selected_by_mode_from_text(val);
+                        break;
+                    case "anf_selected_by_mode":
+                        anf_selected_by_mode_from_text(val);
                         break;
                     case "chkNB_checkstate":
                         chkNB.CheckState = (CheckState)(Enum.Parse(typeof(CheckState), val));
@@ -28701,6 +28709,7 @@ namespace Thetis
             lblAGCLabel.Text = "AGC: " + comboAGC.Text;
 
             m_RX1agcMode = (AGCMode)comboAGC.SelectedIndex; // MW0LGE
+            remember_agc_for_current_mode(1);
 
             // set whether custom controls are active
             switch ((AGCMode)comboAGC.SelectedIndex)
@@ -34804,6 +34813,8 @@ namespace Thetis
 
             DSPMode old_mode = _rx1_dsp_mode;
             int new_mode_nr = selected_nr_for_mode(1, new_mode);
+            AGCMode new_mode_agc = selected_agc_for_mode(1, new_mode);
+            bool new_mode_anf = selected_anf_for_mode(1, new_mode);
 
             WDSP.SetChannelState(WDSP.id(0, 1), 0, 0);              // turn off the DSP channels
             WDSP.SetChannelState(WDSP.id(0, 0), 0, 1);
@@ -35495,6 +35506,8 @@ namespace Thetis
             //MW0LGE_21b
             if (old_mode != new_mode)
             {
+                restore_agc_for_mode(1, new_mode, new_mode_agc);
+                restore_anf_for_mode(1, new_mode, new_mode_anf);
                 restore_nr_for_mode(1, new_mode, new_mode_nr);
                 ModeChangeHandlers?.Invoke(1, old_mode, new_mode, oldBand, RX1Band);
             }
@@ -37283,6 +37296,7 @@ namespace Thetis
                 ANFChangedHandlers?.Invoke(1, _old_anf_state_changed[0], chkANF.Checked);
                 _old_anf_state_changed[0] = chkANF.Checked;
             }
+            remember_anf_for_current_mode(1);
         }
 
         private bool[] _old_snb_state_changed = new bool[] { false, false }; // per rx
@@ -38547,6 +38561,8 @@ namespace Thetis
             Band oldBand = RX2Band; //MW0LGE_21d
             DSPMode old_mode = _rx2_dsp_mode;
             int new_mode_nr = selected_nr_for_mode(2, new_mode);
+            AGCMode new_mode_agc = selected_agc_for_mode(2, new_mode);
+            bool new_mode_anf = selected_anf_for_mode(2, new_mode);
 
             WDSP.SetChannelState(WDSP.id(2, 0), 0, 1);              // turn OFF the DSP channel
 
@@ -39077,6 +39093,8 @@ namespace Thetis
             //MW0LGE_21b
             if (old_mode != new_mode)
             {
+                restore_agc_for_mode(2, new_mode, new_mode_agc);
+                restore_anf_for_mode(2, new_mode, new_mode_anf);
                 restore_nr_for_mode(2, new_mode, new_mode_nr);
                 ModeChangeHandlers?.Invoke(2, old_mode, new_mode, oldBand, RX2Band);
             }
@@ -39464,6 +39482,7 @@ namespace Thetis
                 ANFChangedHandlers?.Invoke(2, _old_anf_state_changed[1], chkRX2ANF.Checked);
                 _old_anf_state_changed[1] = chkRX2ANF.Checked;
             }
+            remember_anf_for_current_mode(2);
         }
 
         private void chkRX2BIN_CheckedChanged(object sender, System.EventArgs e)
@@ -40479,6 +40498,7 @@ namespace Thetis
             lblRX2AGCLabel.Text = "AGC: " + comboRX2AGC.Text;
 
             m_RX2agcMode = (AGCMode)comboRX2AGC.SelectedIndex; // MW0LGE
+            remember_agc_for_current_mode(2);
 
             switch ((AGCMode)comboRX2AGC.SelectedIndex)
             {
@@ -44299,6 +44319,118 @@ namespace Thetis
         private int[,] _nr_selected_by_mode = new int[2, (int)DSPMode.LAST];
         private bool _nr_selected_by_mode_loaded = false;
         private bool _restoring_nr_selected_by_mode = false;
+        private AGCMode[,] _agc_selected_by_mode = new AGCMode[2, (int)DSPMode.LAST];
+        private bool _agc_selected_by_mode_loaded = false;
+        private bool _restoring_agc_selected_by_mode = false;
+        private bool[,] _anf_selected_by_mode = new bool[2, (int)DSPMode.LAST];
+        private bool _anf_selected_by_mode_loaded = false;
+        private bool _restoring_anf_selected_by_mode = false;
+
+        private void ensure_agc_selected_by_mode()
+        {
+            if (_agc_selected_by_mode_loaded) return;
+
+            AGCMode rx1_agc = RX1AGCMode > AGCMode.FIRST && RX1AGCMode < AGCMode.LAST ? RX1AGCMode : AGCMode.MED;
+            AGCMode rx2_agc = RX2AGCMode > AGCMode.FIRST && RX2AGCMode < AGCMode.LAST ? RX2AGCMode : AGCMode.MED;
+            for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+            {
+                _agc_selected_by_mode[0, mode] = rx1_agc;
+                _agc_selected_by_mode[1, mode] = rx2_agc;
+            }
+            _agc_selected_by_mode_loaded = true;
+        }
+
+        private void agc_selected_by_mode_from_text(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            string[] receivers = text.Split('|');
+            if (receivers.Length != 2) return;
+
+            AGCMode[,] values = new AGCMode[2, (int)DSPMode.LAST];
+            for (int rx = 0; rx < receivers.Length; rx++)
+            {
+                string[] modes = receivers[rx].Split(',');
+                if (modes.Length != (int)DSPMode.LAST) return;
+
+                for (int mode = 0; mode < modes.Length; mode++)
+                {
+                    if (!int.TryParse(modes[mode], out int agc) || agc < 0 || agc >= (int)AGCMode.LAST) return;
+                    values[rx, mode] = (AGCMode)agc;
+                }
+            }
+
+            _agc_selected_by_mode = values;
+            _agc_selected_by_mode_loaded = true;
+        }
+
+        private string agc_selected_by_mode_to_text()
+        {
+            ensure_agc_selected_by_mode();
+            string ret = "";
+            for (int rx = 0; rx < 2; rx++)
+            {
+                if (rx > 0) ret += "|";
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    if (mode > 0) ret += ",";
+                    ret += ((int)_agc_selected_by_mode[rx, mode]).ToString();
+                }
+            }
+            return ret;
+        }
+
+        private void ensure_anf_selected_by_mode()
+        {
+            if (_anf_selected_by_mode_loaded) return;
+
+            for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+            {
+                _anf_selected_by_mode[0, mode] = chkANF.Checked;
+                _anf_selected_by_mode[1, mode] = chkRX2ANF.Checked;
+            }
+            _anf_selected_by_mode_loaded = true;
+        }
+
+        private void anf_selected_by_mode_from_text(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            string[] receivers = text.Split('|');
+            if (receivers.Length != 2) return;
+
+            bool[,] values = new bool[2, (int)DSPMode.LAST];
+            for (int rx = 0; rx < receivers.Length; rx++)
+            {
+                string[] modes = receivers[rx].Split(',');
+                if (modes.Length != (int)DSPMode.LAST) return;
+
+                for (int mode = 0; mode < modes.Length; mode++)
+                {
+                    if (modes[mode] != "0" && modes[mode] != "1") return;
+                    values[rx, mode] = modes[mode] == "1";
+                }
+            }
+
+            _anf_selected_by_mode = values;
+            _anf_selected_by_mode_loaded = true;
+        }
+
+        private string anf_selected_by_mode_to_text()
+        {
+            ensure_anf_selected_by_mode();
+            string ret = "";
+            for (int rx = 0; rx < 2; rx++)
+            {
+                if (rx > 0) ret += "|";
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    if (mode > 0) ret += ",";
+                    ret += _anf_selected_by_mode[rx, mode] ? "1" : "0";
+                }
+            }
+            return ret;
+        }
 
         private void ensure_nr_selected_by_mode()
         {
@@ -44359,6 +44491,95 @@ namespace Thetis
         private DSPMode nr_mode_for_rx(int rx)
         {
             return rx == 1 ? _rx1_dsp_mode : _rx2_dsp_mode;
+        }
+
+        private void remember_agc_for_current_mode(int rx)
+        {
+            if (_restoring_agc_selected_by_mode || rx < 1 || rx > 2) return;
+
+            DSPMode mode = nr_mode_for_rx(rx);
+            if (mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+            if (rx == 1 && QSKEnabled && (mode == DSPMode.CWL || mode == DSPMode.CWU)) return;
+
+            ensure_agc_selected_by_mode();
+            _agc_selected_by_mode[rx - 1, (int)mode] = rx == 1 ? RX1AGCMode : RX2AGCMode;
+        }
+
+        private AGCMode selected_agc_for_mode(int rx, DSPMode mode)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return AGCMode.MED;
+
+            ensure_agc_selected_by_mode();
+            return _agc_selected_by_mode[rx - 1, (int)mode];
+        }
+
+        private void restore_agc_for_mode(int rx, DSPMode mode, AGCMode agc)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+            if (rx == 1 && QSKEnabled && (mode == DSPMode.CWL || mode == DSPMode.CWU)) return;
+
+            ensure_agc_selected_by_mode();
+            try
+            {
+                _restoring_agc_selected_by_mode = true;
+                _agc_selected_by_mode[rx - 1, (int)mode] = agc;
+                if (rx == 1) RX1AGCMode = agc;
+                else RX2AGCMode = agc;
+            }
+            finally
+            {
+                _restoring_agc_selected_by_mode = false;
+            }
+        }
+
+        private void remember_anf_for_current_mode(int rx)
+        {
+            if (_restoring_anf_selected_by_mode || rx < 1 || rx > 2) return;
+
+            DSPMode mode = nr_mode_for_rx(rx);
+            if (mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+
+            ensure_anf_selected_by_mode();
+            _anf_selected_by_mode[rx - 1, (int)mode] = rx == 1 ? chkANF.Checked : chkRX2ANF.Checked;
+        }
+
+        private bool selected_anf_for_mode(int rx, DSPMode mode)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return false;
+
+            ensure_anf_selected_by_mode();
+            return _anf_selected_by_mode[rx - 1, (int)mode];
+        }
+
+        private void restore_anf_for_mode(int rx, DSPMode mode, bool anf)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+
+            CheckBoxTS control = rx == 1 ? chkANF : chkRX2ANF;
+            if (!control.Enabled) return;
+
+            ensure_anf_selected_by_mode();
+            try
+            {
+                _restoring_anf_selected_by_mode = true;
+                _anf_selected_by_mode[rx - 1, (int)mode] = anf;
+                if (control.Checked != anf)
+                {
+                    control.Checked = anf;
+                }
+                else if (rx == 1)
+                {
+                    chkANF_CheckedChanged(this, EventArgs.Empty);
+                }
+                else
+                {
+                    chkRX2ANF_CheckedChanged(this, EventArgs.Empty);
+                }
+            }
+            finally
+            {
+                _restoring_anf_selected_by_mode = false;
+            }
         }
 
         private void remember_nr_for_current_mode(int rx)
