@@ -394,6 +394,15 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
+# Local PY2ECM release packaging and verification artifacts
+/.release-work/
+/release-assets/
+
+# Local PY2ECM development notes (not part of the public source or packages)
+/README-BETA1.md
+/RELEASE-PY2ECM-v2.10.3.16-beta1.md
+/THIRD-PARTY-NOTICES.md
+
 # JetBrains Rider
 *.sln.iml
 

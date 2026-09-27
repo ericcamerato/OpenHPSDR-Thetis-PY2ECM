@@ -2,7 +2,7 @@
 
 This file is part of a program that implements a Software-Defined Radio.
 
-Copyright (C) 2013, 2014, 2015, 2016, 2023, 2025 Warren Pratt, NR0V
+Copyright (C) 2013, 2014, 2015, 2016, 2023, 2025, 2026 Warren Pratt, NR0V
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -44,17 +44,13 @@ void create_rxa (int channel)
 		ch[channel].in_rate,							// samplerate
 		0.0);											// amount to shift (Hz)
 
-	// resample to dsp rate for main processing
-	rxa[channel].rsmpin.p = create_resample (
-		0,												// run - will be turned ON below if needed
-		ch[channel].dsp_insize,							// input buffer size
-		rxa[channel].inbuff,							// pointer to input buffer
-		rxa[channel].midbuff,							// pointer to output buffer
-		ch[channel].in_rate,							// input samplerate
-		ch[channel].dsp_rate,							// output samplerate
-		0.0,											// select cutoff automatically
-		0,												// select ncoef automatically
-		1.0);											// gain
+	// input resampler
+	rxa[channel].rsmpin.p = create_HBResampler (
+		ch[channel].in_rate,
+		ch[channel].dsp_rate,
+		ch[channel].dsp_insize,
+		(complex_t *)(void*)rxa[channel].inbuff,
+		(complex_t*)(void*)rxa[channel].midbuff);
 
 	// signal generator
 	rxa[channel].gen0.p = create_gen (
@@ -188,6 +184,14 @@ void create_rxa (int channel)
 		0.02,											// tauR
 		1.4);											// tauI
 
+	// WBFM demod
+	rxa[channel].wbfm.p = create_wbfm(
+		0,												// run
+		ch[channel].dsp_size,							// size
+		rxa[channel].midbuff,							// pointer to input buffer
+		rxa[channel].midbuff,							// pointer to output buffer
+		ch[channel].dsp_rate);							// sample rate
+
 	// FM demod
 	rxa[channel].fmd.p = create_fmd (
 		0,												// run
@@ -217,10 +221,10 @@ void create_rxa (int channel)
 		ch[channel].dsp_size,							// buffer size
 		rxa[channel].midbuff,							// pointer to input signal buffer
 		rxa[channel].midbuff,							// pointer to output signal buffer
-		rxa[channel].fmd.p->audio,						// pointer to trigger buffer
+		getFMDpAudio (channel),					        // pointer to trigger buffer
 		ch[channel].dsp_rate,							// sample rate
 		5000.0,											// cutoff freq for noise filter (Hz)
-		&rxa[channel].fmd.p->pllpole,					// pointer to pole frequency of the fmd pll (Hz)
+		getFMDpPllpole (channel),					    // pointer to pole frequency of the fmd pll (Hz)
 		0.100,											// delay time after channel flush
 		0.001,											// tau for noise averaging
 		0.100,											// tau for long noise averaging
@@ -262,15 +266,15 @@ void create_rxa (int channel)
 	rxa[channel].eqp.p = create_eqp (
 		0,												// run - OFF by default
 		ch[channel].dsp_size,							// buffer size
-		max(2048, ch[channel].dsp_size),				// number of filter coefficients
-		0,												// minimum phase flag
+		max(16384, ch[channel].dsp_size),				// number of filter coefficients
+		1,												// minimum phase flag
 		rxa[channel].midbuff,							// pointer to input buffer
 		rxa[channel].midbuff,							// pointer to output buffer
 		10,												// number of frequencies
 		default_F,										// frequency vector
 		default_G,										// gain vector
 		0,												// cutoff mode
-		0,												// wintype
+		2,												// wintype
 		ch[channel].dsp_rate);							// sample rate
 	}
 
@@ -331,24 +335,39 @@ void create_rxa (int channel)
 		0,												// npe_method
 		1);												// ae_run
 
-	// RNNoise based noise reduction 	// NR3 + NR4 support (nr3)
-	rxa[channel].rnnr.p = create_rnnr (
-		0, 												// run
-		0,												// position
-		ch[channel].dsp_size,							// buffer size
-        rxa[channel].midbuff,							// input buffer
-        rxa[channel].midbuff,							// output buffer
-		ch[channel].dsp_rate);							// samplerate
-
-    // libspecbleach based noise reduction	// NR3 + NR4 support (nr4)
-	rxa[channel].sbnr.p = create_sbnr(
-		0, 												// run
-		0,												// position
+	// NNR
+	rxa[channel].nnr.p = create_nnr (
+		0,												// run
+		1,												// position
 		ch[channel].dsp_size,							// buffer size
 		rxa[channel].midbuff,							// input buffer
 		rxa[channel].midbuff,							// output buffer
-		ch[channel].dsp_rate);							// samplerate
-	
+		ch[channel].dsp_rate,							// samplerate
+		16000,											// internal samplerate
+		512,											// fft size
+		2,												// overlap
+		1,												// lookahead
+		-25.0,											// mask floor
+		1);												// output mode, 1=>(q=0.0)
+
+	// Legacy Thetis NR3 (RNNoise) retained for profile and UI compatibility.
+	rxa[channel].rnnr.p = create_rnnr (
+		0,
+		0,
+		ch[channel].dsp_size,
+		rxa[channel].midbuff,
+		rxa[channel].midbuff,
+		ch[channel].dsp_rate);
+
+	// Legacy Thetis NR4 (libspecbleach) retained for profile and UI compatibility.
+	rxa[channel].sbnr.p = create_sbnr (
+		0,
+		0,
+		ch[channel].dsp_size,
+		rxa[channel].midbuff,
+		rxa[channel].midbuff,
+		ch[channel].dsp_rate);
+
 	// AGC
 	rxa[channel].agc.p = create_wcpagc (
 		1,												// run
@@ -419,7 +438,7 @@ void create_rxa (int channel)
 		0);												// specmode
 
 	// carrier block
-	rxa[channel].cbl.p = create_cbl(
+	rxa[channel].cbl.p = create_cbl (
 		0,												// run - needed only if set to ON
 		ch[channel].dsp_size,							// buffer size
 		rxa[channel].midbuff,							// pointer to input buffer
@@ -427,7 +446,7 @@ void create_rxa (int channel)
 		0,												// mode
 		ch[channel].dsp_rate,							// sample rate
 		0.02,											// tau
-		1);												// position 0 = before AGC, 1 = after agc
+		1);												// position: after AGC
 
 	// double-pole CW filter
 	rxa[channel].doublepole.p = create_doublepole (
@@ -512,7 +531,7 @@ void create_rxa (int channel)
 		2.0 );											// gain
 
 	// syllabic squelch
-	rxa[channel].ssql.p = create_ssql(
+	rxa[channel].ssql.p = create_ssql (
 		0,												// run
 		ch[channel].dsp_size,							// size
 		rxa[channel].midbuff,							// pointer to input buffer
@@ -526,7 +545,7 @@ void create_rxa (int channel)
 		0.08,											// window threshold
 		0.8197,											// trigger threshold
 		2400,											// ring size for f_to_v converter
-		2000.0);										// max freq for f_to_v converter									
+		2000.0 );										// max freq for f_to_v converter									
 
 	// patchpanel
 	rxa[channel].panel.p = create_panel (
@@ -573,15 +592,17 @@ void destroy_rxa (int channel)
 	destroy_bandpass (rxa[channel].bp1.p);
 	destroy_meter (rxa[channel].agcmeter.p);
 	destroy_wcpagc (rxa[channel].agc.p);
+	destroy_nnr (rxa[channel].nnr.p);
+	destroy_rnnr (rxa[channel].rnnr.p);
+	destroy_sbnr (rxa[channel].sbnr.p);
 	destroy_emnr (rxa[channel].emnr.p);
-	destroy_rnnr (rxa[channel].rnnr.p);	// NR3 + NR4 support (nr3)
-    destroy_sbnr (rxa[channel].sbnr.p);	// NR3 + NR4 support (nr4)
 	destroy_anr (rxa[channel].anr.p);
 	destroy_anf (rxa[channel].anf.p);
 	destroy_eqp (rxa[channel].eqp.p);
 	destroy_snba (rxa[channel].snba.p);
 	destroy_fmsq (rxa[channel].fmsq.p);
 	destroy_fmd (rxa[channel].fmd.p);
+	destroy_wbfm(rxa[channel].wbfm.p);
 	destroy_amd (rxa[channel].amd.p);
 	destroy_amsq (rxa[channel].amsq.p);
 	destroy_meter (rxa[channel].smeter.p);
@@ -591,7 +612,7 @@ void destroy_rxa (int channel)
 	destroy_notchdb (rxa[channel].ndb.p);
 	destroy_meter (rxa[channel].adcmeter.p);
 	destroy_gen (rxa[channel].gen0.p);
-	destroy_resample (rxa[channel].rsmpin.p);
+	destroy_HBResampler(rxa[channel].rsmpin.p);
 	destroy_shift (rxa[channel].shift.p);
 	_aligned_free (rxa[channel].midbuff);
 	_aligned_free (rxa[channel].outbuff);
@@ -604,7 +625,7 @@ void flush_rxa (int channel)
 	memset (rxa[channel].outbuff, 0, 1 * ch[channel].dsp_outsize * sizeof (complex));
 	memset (rxa[channel].midbuff, 0, 2 * ch[channel].dsp_size    * sizeof (complex));
 	flush_shift (rxa[channel].shift.p);
-	flush_resample (rxa[channel].rsmpin.p);
+	flush_HBResampler(rxa[channel].rsmpin.p);
 	flush_gen (rxa[channel].gen0.p);
 	flush_meter (rxa[channel].adcmeter.p);
 	flush_nbp (rxa[channel].nbp0.p);
@@ -613,6 +634,7 @@ void flush_rxa (int channel)
 	flush_meter (rxa[channel].smeter.p);
 	flush_amsq (rxa[channel].amsq.p);
 	flush_amd (rxa[channel].amd.p);
+	flush_wbfm(rxa[channel].wbfm.p);
 	flush_fmd (rxa[channel].fmd.p);
 	flush_fmsq (rxa[channel].fmsq.p);
 	flush_snba (rxa[channel].snba.p);
@@ -620,6 +642,7 @@ void flush_rxa (int channel)
 	flush_anf (rxa[channel].anf.p);
 	flush_anr (rxa[channel].anr.p);
 	flush_emnr (rxa[channel].emnr.p);
+	flush_nnr (rxa[channel].nnr.p);
 	flush_wcpagc (rxa[channel].agc.p);
 	flush_meter (rxa[channel].agcmeter.p);
 	flush_bandpass (rxa[channel].bp1.p);
@@ -638,7 +661,7 @@ void flush_rxa (int channel)
 void xrxa (int channel)
 {
 	xshift (rxa[channel].shift.p);
-	xresample (rxa[channel].rsmpin.p);
+	xHBResampler(rxa[channel].rsmpin.p);
 	xgen (rxa[channel].gen0.p);
 	xmeter (rxa[channel].adcmeter.p);
 	xbpsnbain (rxa[channel].bpsnba.p, 0);
@@ -648,6 +671,7 @@ void xrxa (int channel)
 	xamsqcap (rxa[channel].amsq.p);
 	xbpsnbaout (rxa[channel].bpsnba.p, 0);
 	xamd (rxa[channel].amd.p);
+	xwbfm(rxa[channel].wbfm.p);
 	xfmd (rxa[channel].fmd.p);
 	xfmsq (rxa[channel].fmsq.p);
 	xbpsnbain (rxa[channel].bpsnba.p, 1);
@@ -657,20 +681,22 @@ void xrxa (int channel)
 	xanf (rxa[channel].anf.p, 0);
 	xanr (rxa[channel].anr.p, 0);
 	xemnr (rxa[channel].emnr.p, 0);
-	xrnnr (rxa[channel].rnnr.p, 0);	// NR3 + NR4 support (nr3)
-    xsbnr (rxa[channel].sbnr.p, 0);	// NR3 + NR4 support (nr4)
+	xnnr (rxa[channel].nnr.p, 0);
+	xrnnr (rxa[channel].rnnr.p, 0);
+	xsbnr (rxa[channel].sbnr.p, 0);
 	xbandpass (rxa[channel].bp1.p, 0);
-	xcbl(rxa[channel].cbl.p, 0);	// [2.10.3.13]MW0LGE carrier removal before AGC
+	xcbl (rxa[channel].cbl.p, 0);
 	xwcpagc (rxa[channel].agc.p);
 	xanf (rxa[channel].anf.p, 1);
 	xanr (rxa[channel].anr.p, 1);
 	xemnr (rxa[channel].emnr.p, 1);
-    xrnnr (rxa[channel].rnnr.p, 1);	// NR3 + NR4 support (nr3)
-    xsbnr (rxa[channel].sbnr.p, 1);	// NR3 + NR4 support (nr4)
+	xnnr(rxa[channel].nnr.p, 1);
+	xrnnr (rxa[channel].rnnr.p, 1);
+	xsbnr (rxa[channel].sbnr.p, 1);
 	xbandpass (rxa[channel].bp1.p, 1);
 	xmeter (rxa[channel].agcmeter.p);
 	xsiphon (rxa[channel].sip1.p, 0);
-	xcbl (rxa[channel].cbl.p, 1);	// carrier removal after AGC (default)
+	xcbl (rxa[channel].cbl.p, 1);
 	xdoublepole (rxa[channel].doublepole.p, 0);
 	xmatched (rxa[channel].matched.p, 0);
 	xgaussian (rxa[channel].gaussian.p, 0);
@@ -692,9 +718,9 @@ void setInputSamplerate_rxa (int channel)
 	setSize_shift (rxa[channel].shift.p, ch[channel].dsp_insize);
 	setSamplerate_shift (rxa[channel].shift.p, ch[channel].in_rate);
 	// input resampler
-	setBuffers_resample (rxa[channel].rsmpin.p, rxa[channel].inbuff, rxa[channel].midbuff);
-	setSize_resample (rxa[channel].rsmpin.p, ch[channel].dsp_insize);
-	setInRate_resample (rxa[channel].rsmpin.p, ch[channel].in_rate);
+	setBuffers_HBResampler(rxa[channel].rsmpin.p, (complex_t*)(void*)rxa[channel].inbuff, (complex_t*)(void*)rxa[channel].midbuff);
+	setSize_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_insize);
+	setInRate_HBResampler(rxa[channel].rsmpin.p, ch[channel].in_rate);
 	RXAResCheck (channel);
 }
 
@@ -720,9 +746,9 @@ void setDSPSamplerate_rxa (int channel)
 	setBuffers_shift (rxa[channel].shift.p, rxa[channel].inbuff, rxa[channel].inbuff);
 	setSize_shift (rxa[channel].shift.p, ch[channel].dsp_insize);
 	// input resampler
-	setBuffers_resample (rxa[channel].rsmpin.p, rxa[channel].inbuff, rxa[channel].midbuff);
-	setSize_resample (rxa[channel].rsmpin.p, ch[channel].dsp_insize);
-	setOutRate_resample (rxa[channel].rsmpin.p, ch[channel].dsp_rate);
+	setBuffers_HBResampler(rxa[channel].rsmpin.p, (complex_t*)(void*)rxa[channel].inbuff, (complex_t*)(void*)rxa[channel].midbuff);
+	setSize_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_insize);
+	setOutRate_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_rate);
 	// dsp_rate blocks
 	setSamplerate_gen (rxa[channel].gen0.p, ch[channel].dsp_rate);
 	setSamplerate_meter (rxa[channel].adcmeter.p, ch[channel].dsp_rate);
@@ -732,16 +758,18 @@ void setDSPSamplerate_rxa (int channel)
 	setSamplerate_sender (rxa[channel].sender.p, ch[channel].dsp_rate);
 	setSamplerate_amsq (rxa[channel].amsq.p, ch[channel].dsp_rate);
 	setSamplerate_amd (rxa[channel].amd.p, ch[channel].dsp_rate);
+	setSamplerate_wbfm(rxa[channel].wbfm.p, ch[channel].dsp_rate);
 	setSamplerate_fmd (rxa[channel].fmd.p, ch[channel].dsp_rate);
-	setBuffers_fmsq (rxa[channel].fmsq.p, rxa[channel].midbuff, rxa[channel].midbuff, rxa[channel].fmd.p->audio);
+	setBuffers_fmsq (rxa[channel].fmsq.p, rxa[channel].midbuff, rxa[channel].midbuff, getFMDpAudio (channel));
 	setSamplerate_fmsq (rxa[channel].fmsq.p, ch[channel].dsp_rate);
 	setSamplerate_snba (rxa[channel].snba.p, ch[channel].dsp_rate);
 	setSamplerate_eqp (rxa[channel].eqp.p, ch[channel].dsp_rate);
 	setSamplerate_anf (rxa[channel].anf.p, ch[channel].dsp_rate);
 	setSamplerate_anr (rxa[channel].anr.p, ch[channel].dsp_rate);
 	setSamplerate_emnr (rxa[channel].emnr.p, ch[channel].dsp_rate);
-	setSamplerate_rnnr(rxa[channel].rnnr.p, ch[channel].dsp_rate); // NR3 + NR4 support (nr3)
-	setSamplerate_sbnr(rxa[channel].sbnr.p, ch[channel].dsp_rate); // NR3 + NR4 support (nr4)
+	setSamplerate_nnr (rxa[channel].nnr.p, ch[channel].dsp_rate);
+	setSamplerate_rnnr (rxa[channel].rnnr.p, ch[channel].dsp_rate);
+	setSamplerate_sbnr (rxa[channel].sbnr.p, ch[channel].dsp_rate);
 	setSamplerate_bandpass (rxa[channel].bp1.p, ch[channel].dsp_rate);
 	setSamplerate_wcpagc (rxa[channel].agc.p, ch[channel].dsp_rate);
 	setSamplerate_meter (rxa[channel].agcmeter.p, ch[channel].dsp_rate);
@@ -773,8 +801,8 @@ void setDSPBuffsize_rxa (int channel)
 	setBuffers_shift (rxa[channel].shift.p, rxa[channel].inbuff, rxa[channel].inbuff);
 	setSize_shift (rxa[channel].shift.p, ch[channel].dsp_insize);
 	// input resampler
-	setBuffers_resample (rxa[channel].rsmpin.p, rxa[channel].inbuff, rxa[channel].midbuff);
-	setSize_resample (rxa[channel].rsmpin.p, ch[channel].dsp_insize);
+	setBuffers_HBResampler(rxa[channel].rsmpin.p, (complex_t*)(void*)rxa[channel].inbuff, (complex_t*)(void*)rxa[channel].midbuff);
+	setSize_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_insize);
 	// dsp_size blocks
 	setBuffers_gen (rxa[channel].gen0.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_gen (rxa[channel].gen0.p, ch[channel].dsp_size);
@@ -792,9 +820,11 @@ void setDSPBuffsize_rxa (int channel)
 	setSize_amsq (rxa[channel].amsq.p, ch[channel].dsp_size);
 	setBuffers_amd (rxa[channel].amd.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_amd (rxa[channel].amd.p, ch[channel].dsp_size);
+	setBuffers_wbfm(rxa[channel].wbfm.p, rxa[channel].midbuff, rxa[channel].midbuff);
+	setSize_wbfm(rxa[channel].wbfm.p, ch[channel].dsp_size);
 	setBuffers_fmd (rxa[channel].fmd.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_fmd (rxa[channel].fmd.p, ch[channel].dsp_size);
-	setBuffers_fmsq (rxa[channel].fmsq.p, rxa[channel].midbuff, rxa[channel].midbuff, rxa[channel].fmd.p->audio);
+	setBuffers_fmsq (rxa[channel].fmsq.p, rxa[channel].midbuff, rxa[channel].midbuff, getFMDpAudio (channel));
 	setSize_fmsq (rxa[channel].fmsq.p, ch[channel].dsp_size);
 	setBuffers_snba (rxa[channel].snba.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_snba (rxa[channel].snba.p, ch[channel].dsp_size);
@@ -805,11 +835,13 @@ void setDSPBuffsize_rxa (int channel)
 	setBuffers_anr (rxa[channel].anr.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_anr (rxa[channel].anr.p, ch[channel].dsp_size);
 	setBuffers_emnr (rxa[channel].emnr.p, rxa[channel].midbuff, rxa[channel].midbuff);
-	setSize_rnnr(rxa[channel].rnnr.p, ch[channel].dsp_size); // NR3 + NR4 support (nr3)
-	setBuffers_rnnr(rxa[channel].rnnr.p, rxa[channel].midbuff, rxa[channel].midbuff); // NR3 + NR4 support (nr3)
-	setSize_sbnr(rxa[channel].sbnr.p, ch[channel].dsp_size); // NR3 + NR4 support (nr4)
-    setBuffers_sbnr (rxa[channel].sbnr.p, rxa[channel].midbuff, rxa[channel].midbuff); // NR3 + NR4 support (nr4)
 	setSize_emnr (rxa[channel].emnr.p, ch[channel].dsp_size);
+	setBuffers_nnr(rxa[channel].nnr.p, rxa[channel].midbuff, rxa[channel].midbuff);
+	setSize_nnr(rxa[channel].nnr.p, ch[channel].dsp_size);
+	setBuffers_rnnr (rxa[channel].rnnr.p, rxa[channel].midbuff, rxa[channel].midbuff);
+	setSize_rnnr (rxa[channel].rnnr.p, ch[channel].dsp_size);
+	setBuffers_sbnr (rxa[channel].sbnr.p, rxa[channel].midbuff, rxa[channel].midbuff);
+	setSize_sbnr (rxa[channel].sbnr.p, ch[channel].dsp_size);
 	setBuffers_bandpass (rxa[channel].bp1.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_bandpass (rxa[channel].bp1.p, ch[channel].dsp_size);
 	setBuffers_wcpagc (rxa[channel].agc.p, rxa[channel].midbuff, rxa[channel].midbuff);
@@ -852,16 +884,17 @@ void SetRXAMode (int channel, int mode)
 	{
 		int amd_run = (mode == RXA_AM) || (mode == RXA_SAM);
 		RXAbpsnbaCheck (channel, mode, rxa[channel].ndb.p->master_run);
-
 		RXAbp1Check (channel, amd_run, rxa[channel].snba.p->run, rxa[channel].emnr.p->run,
-                             rxa[channel].anf.p->run, rxa[channel].anr.p->run,
-                             rxa[channel].rnnr.p->run, rxa[channel].sbnr.p->run); // NR3 + NR4 support
-
+			getRun_nnr(rxa[channel].nnr.p), rxa[channel].anf.p->run, rxa[channel].anr.p->run,
+			rxa[channel].rnnr.p->run, rxa[channel].sbnr.p->run);
 		EnterCriticalSection (&ch[channel].csDSP);
 		rxa[channel].mode = mode;
-		rxa[channel].amd.p->run  = 0;
-		rxa[channel].fmd.p->run  = 0;
-		rxa[channel].agc.p->run  = 1;
+		rxa[channel].amd.p->run   = 0;
+		rxa[channel].wbfm.p->run  = 0;
+		setFMDRun (channel, 0);
+		rxa[channel].agc.p->run   = 1;
+		rxa[channel].nbp0.p->run  = 1;
+		rxa[channel].panel.p->run = 1;
 		switch (mode)
 		{
 		case RXA_AM:
@@ -876,41 +909,45 @@ void SetRXAMode (int channel, int mode)
 		
 			break;
 		case RXA_FM:
-			rxa[channel].fmd.p->run  = 1;
+			setFMDRun (channel, 1);
 			rxa[channel].agc.p->run  = 0;
+			break;
+		case RXA_WBFM:
+			rxa[channel].wbfm.p->run  = 1;
+			rxa[channel].agc.p->run   = 0;
+			rxa[channel].nbp0.p->run  = 0;
+			rxa[channel].panel.p->run = 0;
 			break;
 		default:
 
 			break;
 		}
 		RXAbp1Set (channel);
-		RXAbpsnbaSet (channel);							// update variables
+		RXAbpsnbaSet (channel);
 		LeaveCriticalSection (&ch[channel].csDSP);
 	}
 }
 
 void RXAResCheck (int channel)
 {	
-	// turn OFF/ON resamplers depending upon whether they're needed
-	RESAMPLE a = rxa[channel].rsmpin.p;
-	if (ch[channel].in_rate  != ch[channel].dsp_rate)	a->run = 1;
-	else												a->run = 0;
-	a = rxa[channel].rsmpout.p;
-	if (ch[channel].dsp_rate != ch[channel].out_rate)	a->run = 1;
-	else												a->run = 0;
+	// HBResampler (rsmpin) turns OFF/ON automatically for this situation.
+	RESAMPLE b = rxa[channel].rsmpout.p;
+	if (ch[channel].dsp_rate != ch[channel].out_rate)	b->run = 1;
+	else												b->run = 0;
 }
 
 void RXAbp1Check (int channel, int amd_run, int snba_run, 
-	int emnr_run, int anf_run, int anr_run,
-	int rnnr_run, int sbnr_run) // NR3 + NR4 support
+	int emnr_run, int nnr_run, int anf_run, int anr_run,
+	int rnnr_run, int sbnr_run)
 {
 	BANDPASS a = rxa[channel].bp1.p;
 	double gain;
 	if (amd_run  ||
 		snba_run ||
 		emnr_run ||
-        rnnr_run || // NR3 + NR4 support (nr3)
-        sbnr_run || // NR3 + NR4 support (nr4)
+		nnr_run  ||
+		rnnr_run ||
+		sbnr_run ||
 		anf_run  ||
 		anr_run)	gain = 2.0;
 	else			gain = 1.0;
@@ -925,8 +962,9 @@ void RXAbp1Set (int channel)
 	if ((rxa[channel].amd.p->run  == 1) ||
 		(rxa[channel].snba.p->run == 1) ||
 		(rxa[channel].emnr.p->run == 1) ||
-        (rxa[channel].rnnr.p->run == 1) ||  // NR3 + NR4 support (nr3)
-        (rxa[channel].sbnr.p->run == 1) ||  // NR3 + NR4 support (nr4)
+		(getRun_nnr (rxa[channel].nnr.p) == 1) ||
+		(rxa[channel].rnnr.p->run == 1) ||
+		(rxa[channel].sbnr.p->run == 1) ||
 		(rxa[channel].anf.p->run  == 1) ||
 		(rxa[channel].anr.p->run  == 1))	a->run = 1;
 	else									a->run = 0;
@@ -965,6 +1003,7 @@ void RXAbpsnbaCheck (int channel, int mode, int notch_run)
 			run_notches = 0;
 			break;
 		case RXA_FM:
+		case RXA_WBFM:
 			f_low  = +a->abs_low_freq;
 			f_high = +a->abs_high_freq;
 			run_notches = 0;
@@ -1046,7 +1085,6 @@ void RXASetNC (int channel, int nc)
 	RXANBPSetNC					(channel, nc);
 	RXABPSNBASetNC				(channel, nc);
 	SetRXABandpassNC			(channel, nc);
-	SetRXAEQNC					(channel, nc);
 	SetRXAFMSQNC				(channel, nc);
 	SetRXAFMNCde				(channel, nc);
 	SetRXAFMNCaud				(channel, nc);
@@ -1059,7 +1097,6 @@ void RXASetMP (int channel, int mp)
 	RXANBPSetMP					(channel, mp);
 	RXABPSNBASetMP				(channel, mp);
 	SetRXABandpassMP			(channel, mp);
-	SetRXAEQMP					(channel, mp);
 	SetRXAFMSQMP				(channel, mp);
 	SetRXAFMMPde				(channel, mp);
 	SetRXAFMMPaud				(channel, mp);

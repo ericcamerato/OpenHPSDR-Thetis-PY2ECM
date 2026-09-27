@@ -123,6 +123,7 @@ namespace Thetis
 
             lstVersions.Items.Clear();
             lstVersions.Items.Add("Version: " + version);
+            lstVersions.Items.Add("Beta 1 expires (UTC): " + TitleBar.BetaExpirationUtc.ToString("yyyy-MM-dd"));
             lstVersions.Items.Add("Database Version: " + db_version);
             lstVersions.Items.Add("Radio Model: " + radio_model);
             if (!string.IsNullOrEmpty(andromeda_version)) lstVersions.Items.Add(andromeda_version); // includes the version: preamble in the string
@@ -200,7 +201,7 @@ namespace Thetis
                 case 7: Common.OpenUri("https://community.apache-labs.com/viewtopic.php?f=27&t=3080"); break;
                 case 8: Common.OpenUri("https://community.apache-labs.com/viewtopic.php?f=32&t=4972"); break;
                 case 9: Common.OpenUri("https://github.com/laurencebarker/Saturn"); break;
-                case 10: Common.OpenUri("https://github.com/mi0bot/OpenHPSDR-Thetis/releases"); break;
+                case 10: Common.OpenUri("https://github.com/TAPR/OpenHPSDR-Thetis"); break;
                 case 11: Common.OpenUri("https://github.com/TAPR/OpenHPSDR-wdsp"); break;
                 case 12: Common.OpenUri("https://www.oe3ide.com/wp/software/"); break;
                 case 13: break; // splitter

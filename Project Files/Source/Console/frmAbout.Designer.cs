@@ -59,7 +59,9 @@
             "G8NJJ, Laurence (G2, Andromeda & protocols)",
             "N1GP, Rick (Firmware related changes)",
             "W4WMT, Bryan (Resampler, VAC & cmASIO)",
-            "MI0BOT, Reid (Hermes Lite 2)",
+            "MI0BOT, Reid Campbell (Hermes Lite 2 integration)",
+            "PY2ECM, Eric Camerato (this edition and WDSP 2.10 integration)",
+            "PY5VB, Luis Antonio Villas Boas (HL2+ testing and feedback)",
             "MW0LGE, Richie (UI & various)",
             "W5WC, Doug (UI, ChannelMaster, various & Thetis naming)",
             "W2PA, Chris (QSK & MIDI)",
@@ -106,7 +108,7 @@
             this.lstVersions.Location = new System.Drawing.Point(19, 54);
             this.lstVersions.Name = "lstVersions";
             this.lstVersions.SelectionMode = System.Windows.Forms.SelectionMode.None;
-            this.lstVersions.Size = new System.Drawing.Size(317, 176);
+            this.lstVersions.Size = new System.Drawing.Size(317, 192);
             this.lstVersions.TabIndex = 3;
             // 
             // lnkLicence
@@ -139,7 +141,7 @@
             "Protocol1 Firmware (7000/8000)",
             "Protocol2 Firmware (7000/8000) RF fix",
             "G2 Firmware & Software \"p2app\"",
-            "Thetis for Hermes Lite 2 on GitHub",
+            "OpenHPSDR Thetis upstream on GitHub",
             "WDSP Documentation on GitHub",
             "OE3IDE\'s (Ernst) Connectors & Tools",
             "---MANUALS---",

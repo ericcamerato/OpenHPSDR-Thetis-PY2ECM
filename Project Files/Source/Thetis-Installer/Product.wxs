@@ -8,9 +8,9 @@
 <!-- 32-bit / 64-bit variables -->
 <?if $(var.Platform) = x64 ?>
 <?define Win64 = "yes" ?>
-<?define UpgradeCode = "1FB8D39E-FC39-4D30-BD10-F8DFD2F6C2D4"?>
-<?define ProductName = "Thetis HL2" ?>
-<?define ThetisName = "Thetis"?>
+<?define UpgradeCode = "B9AF576A-53F9-4B5E-8923-C61E71AE6134"?>
+<?define ProductName = "Thetis PY2ECM WDSP 2.10 Beta 1" ?>
+<?define ThetisName = "Thetis PY2ECM Beta 1"?>
 <?define VC145 = "Microsoft_VC145_CRT_x64.msm" ?>
 <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
 <?define FilesPath = "..\..\Bin\$(var.Platform)\$(var.Configuration)\" ?>
@@ -119,7 +119,7 @@
 
       <Directory Id="$(var.PlatformProgramFilesFolder)">
         <Directory Id="HPSDRFolder" Name="OpenHPSDR">
-          <Directory Id="INSTALLFOLDER" Name="Thetis-HL2">
+          <Directory Id="INSTALLFOLDER" Name="Thetis-PY2ECM-WDSP210-Beta1">
 		  </Directory>
         </Directory>
       </Directory>
@@ -139,19 +139,19 @@
 
   <Fragment>
     <DirectoryRef Id="DesktopFolder">
-      <Component Id="DesktopShortcut" Guid="3A24B19E-E692-4530-ABD8-6E7B737D2060">       
+      <Component Id="DesktopShortcut" Guid="9E5BFC06-E8F4-48BF-9235-37554F812A70">
         <Shortcut Id="ProgramDesktopShortcut"
                   Name="$(var.ThetisName)"
-                  Description="Run Thetis"
+                  Description="Run Thetis PY2ECM Beta 1 with the default database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   WorkingDirectory="INSTALLFOLDER" />
         <RegistryValue Root="HKLM" Key="Software\OpenHPSDR\$(var.ThetisName)"
                 Name="desktopShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
-      <Component Id="DesktopShortcutHL2" Guid="2B5082FF-264C-481D-948D-1930362AAAFB">       
+      <Component Id="DesktopShortcutHL2" Guid="57AA8370-268F-414F-ADA8-F8F727C1B06C">
         <Shortcut Id="ProgramDesktopShortcutHL2"
                   Name="$(var.ThetisName)-HL2"
-                  Description="Run HL2 Thetis"
+                  Description="Run Thetis PY2ECM Beta 1 with the HL2 database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   Arguments="-dbid:HL2"
                   WorkingDirectory="INSTALLFOLDER" />
@@ -165,13 +165,13 @@
               
         <Shortcut Id="ThetisShortcut"
                   Name="$(var.ThetisName)"
-                  Description="Run Thetis"
+                  Description="Run Thetis PY2ECM Beta 1 with the default database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   WorkingDirectory="INSTALLFOLDER"
                   />
         <Shortcut Id="ThetisShortcutHL2"
                   Name="$(var.ThetisName)-HL2"
-                  Description="Run HL2 Thetis"
+                  Description="Run Thetis PY2ECM Beta 1 with the HL2 database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   Arguments="-dbid:HL2"
                   WorkingDirectory="INSTALLFOLDER"
@@ -800,31 +800,18 @@
 				Checksum="yes"
             />
 		</Component>
+		<Component Guid="*">
+			<File Id="PY2ECMThirdPartyNotices"
+				Source="..\..\..\THIRD-PARTY-NOTICES.txt"
+				KeyPath="yes" />
+		</Component>
+		<Component Guid="*">
+			<File Id="PY2ECMSourceLicense"
+				Source="..\..\..\LICENSE"
+				KeyPath="yes" />
+		</Component>
 	</ComponentGroup>
 
-    <Binary Id="InstallSkins" SourceFile="OpenHPSDR_Skins.exe" />
-    <CustomAction Id="InstallSkins_CA" BinaryKey="InstallSkins"
-        Impersonate="yes" Execute="deferred" ExeCommand="[SystemFolder]cmd.exe /C start OpenHPSDR_Skins.exe &amp; exit"
-                  Return="check"/>
-
-	  <Binary Id="InstallMeterSkins" SourceFile="MeterSkinInstaller.exe" />
-	  <CustomAction Id="InstallMeterSkins_CA" BinaryKey="InstallMeterSkins"
-		  Impersonate="yes" Execute="deferred" ExeCommand="[SystemFolder]cmd.exe /C start MeterSkinInstaller.exe"
-					Return="check"/>
-
-    <InstallExecuteSequence>
-      <Custom Action='InstallSkins_CA' Before='InstallFinalize'>
-        NOT Installed
-      </Custom>
-    </InstallExecuteSequence>
-
-	  <InstallExecuteSequence>
-		  <Custom Action='InstallMeterSkins_CA' Before='InstallFinalize'>
-			  NOT Installed
-		  </Custom>
-	  </InstallExecuteSequence>
-	  
-    <!--   -->
   </Fragment>
 
 </Wix>

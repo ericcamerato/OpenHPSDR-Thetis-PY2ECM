@@ -29,19 +29,19 @@ warren@wpratt.com
 
 typedef struct _cbl
 {
-	int run;							//run
-	int buff_size;						//buffer size
-	double *in_buff;					//pointer to input buffer
-	double *out_buff;					//pointer to output buffer
+	int run;
+	int buff_size;
+	double* in_buff;
+	double* out_buff;
 	int mode;
-	double sample_rate;					//sample rate
+	double sample_rate;
 	double prevIin;
 	double prevQin;
 	double prevIout;
 	double prevQout;
-	double tau;							//carrier removal time constant
-	double mtau;						//carrier removal multiplier
-	double position;					//0 before AGC, 1 after AGC
+	double tau;
+	double mtau;
+	int position;
 } cbl, *CBL;
 
 extern CBL create_cbl
@@ -71,6 +71,7 @@ extern void setSize_cbl (CBL a, int size);
 // RXA Properties
 
 extern __declspec (dllexport) void SetRXACBLRun(int channel, int setit);
+
 extern __declspec (dllexport) void SetRXACBLPosition(int channel, int position);
 
 #endif

@@ -756,6 +756,8 @@
             this.NR2ToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             this.NR3ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.NR4ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.NR5ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.NR6ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.ANFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.NBToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.NB2ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -842,6 +844,8 @@
             this.NR2StripMenuItem2 = new System.Windows.Forms.ToolStripMenuItem();
             this.NR3ToolStripMenuItem_rx2 = new System.Windows.Forms.ToolStripMenuItem();
             this.NR4ToolStripMenuItem_rx2 = new System.Windows.Forms.ToolStripMenuItem();
+            this.NR5ToolStripMenuItem_rx2 = new System.Windows.Forms.ToolStripMenuItem();
+            this.NR6ToolStripMenuItem_rx2 = new System.Windows.Forms.ToolStripMenuItem();
             this.aNF2ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.nB2ToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             this.nBRX2ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -4242,6 +4246,8 @@
             this.NR2ToolStripMenuItem1,
             this.NR3ToolStripMenuItem,
             this.NR4ToolStripMenuItem,
+            this.NR5ToolStripMenuItem,
+            this.NR6ToolStripMenuItem,
             this.ANFToolStripMenuItem,
             this.NBToolStripMenuItem,
             this.NB2ToolStripMenuItem,
@@ -4278,6 +4284,20 @@
             this.NR4ToolStripMenuItem.Name = "NR4ToolStripMenuItem";
             resources.ApplyResources(this.NR4ToolStripMenuItem, "NR4ToolStripMenuItem");
             this.NR4ToolStripMenuItem.Click += new System.EventHandler(this.mnuDSP_Click);
+            //
+            // NR5ToolStripMenuItem
+            //
+            this.NR5ToolStripMenuItem.Name = "NR5ToolStripMenuItem";
+            this.NR5ToolStripMenuItem.Size = new System.Drawing.Size(203, 22);
+            this.NR5ToolStripMenuItem.Text = "NR5 (NNR Standard)";
+            this.NR5ToolStripMenuItem.Click += new System.EventHandler(this.mnuDSP_Click);
+            //
+            // NR6ToolStripMenuItem
+            //
+            this.NR6ToolStripMenuItem.Name = "NR6ToolStripMenuItem";
+            this.NR6ToolStripMenuItem.Size = new System.Drawing.Size(203, 22);
+            this.NR6ToolStripMenuItem.Text = "NR6 (NNR Premium)";
+            this.NR6ToolStripMenuItem.Click += new System.EventHandler(this.mnuDSP_Click);
             // 
             // ANFToolStripMenuItem
             // 
@@ -4850,6 +4870,8 @@
             this.NR2StripMenuItem2,
             this.NR3ToolStripMenuItem_rx2,
             this.NR4ToolStripMenuItem_rx2,
+            this.NR5ToolStripMenuItem_rx2,
+            this.NR6ToolStripMenuItem_rx2,
             this.aNF2ToolStripMenuItem,
             this.nB2ToolStripMenuItem1,
             this.nBRX2ToolStripMenuItem,
@@ -4883,6 +4905,20 @@
             this.NR4ToolStripMenuItem_rx2.Name = "NR4ToolStripMenuItem_rx2";
             resources.ApplyResources(this.NR4ToolStripMenuItem_rx2, "NR4ToolStripMenuItem_rx2");
             this.NR4ToolStripMenuItem_rx2.Click += new System.EventHandler(this.mnuDSPRX2_Click);
+            //
+            // NR5ToolStripMenuItem_rx2
+            //
+            this.NR5ToolStripMenuItem_rx2.Name = "NR5ToolStripMenuItem_rx2";
+            this.NR5ToolStripMenuItem_rx2.Size = new System.Drawing.Size(203, 22);
+            this.NR5ToolStripMenuItem_rx2.Text = "NR5 (NNR Standard)";
+            this.NR5ToolStripMenuItem_rx2.Click += new System.EventHandler(this.mnuDSPRX2_Click);
+            //
+            // NR6ToolStripMenuItem_rx2
+            //
+            this.NR6ToolStripMenuItem_rx2.Name = "NR6ToolStripMenuItem_rx2";
+            this.NR6ToolStripMenuItem_rx2.Size = new System.Drawing.Size(203, 22);
+            this.NR6ToolStripMenuItem_rx2.Text = "NR6 (NNR Premium)";
+            this.NR6ToolStripMenuItem_rx2.Click += new System.EventHandler(this.mnuDSPRX2_Click);
             // 
             // aNF2ToolStripMenuItem
             // 
@@ -7919,8 +7955,12 @@
         private Panel pnlDisplay;
         private ToolStripMenuItem NR3ToolStripMenuItem;
         private ToolStripMenuItem NR4ToolStripMenuItem;
+        private ToolStripMenuItem NR5ToolStripMenuItem;
+        private ToolStripMenuItem NR6ToolStripMenuItem;
         private ToolStripMenuItem NR3ToolStripMenuItem_rx2;
         private ToolStripMenuItem NR4ToolStripMenuItem_rx2;
+        private ToolStripMenuItem NR5ToolStripMenuItem_rx2;
+        private ToolStripMenuItem NR6ToolStripMenuItem_rx2;
         private ButtonTS btnAPF_type;
         private ToolStripStatusLabel toolStripStatusLabel_PAstatus;
         private ToolStripStatusLabel toolStripStatus_PAspacer;

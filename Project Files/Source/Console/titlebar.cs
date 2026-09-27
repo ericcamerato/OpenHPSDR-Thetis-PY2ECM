@@ -50,7 +50,8 @@ namespace Thetis
 {
     class TitleBar
     {
-        public const string BUILD_NAME = "HL2 (MI0BOT)";
+        public const string BUILD_NAME = "PY2ECM Beta 1";
+        public static readonly DateTime BetaExpirationUtc = new DateTime(2026, 12, 25, 0, 0, 0, DateTimeKind.Utc);
         public static string GetString(bool bWithFirmware = true)
         {
             string sRevision = "." + Common.GetRevision();
@@ -62,7 +63,9 @@ namespace Thetis
             string sBits = Common.Is64Bit ? " x64" : " x86";
 
             s += " v" + version + sBits;
-            s += " (" + VersionInfo.BuildDate + ")<FW>";  //[2.10.2.2]MW0LGE use the auto generated class from pre build event for the BuildDate
+            // The generated build date can be malformed on localized Windows
+            // builds. Keep the firmware suffix, but omit that cosmetic date.
+            s += "<FW>";
 
             if (BUILD_NAME != "") s += " " + BUILD_NAME;
 

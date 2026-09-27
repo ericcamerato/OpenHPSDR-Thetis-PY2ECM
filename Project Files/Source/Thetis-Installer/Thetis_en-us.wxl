@@ -3,11 +3,11 @@
   <String Id="Language">1033</String>
   <!-- Supported language and codepage codes can be found here: http://www.tramontana.co.hu/wix/lesson2.php#2.4 -->
 
-  <String Id="ApplicationName">Thetis</String>
-  <String Id="ManufacturerName">OpenHPSDR</String>
+  <String Id="ApplicationName">Thetis PY2ECM Beta 1</String>
+  <String Id="ManufacturerName">PY2ECM</String>
   <String Id="ManufacturerFullName">Doug Wigley, W5WC</String>
   <String Id="ProductDescription">Software Defined Radio</String>
-  <String Id="Comments">Installs Thetis</String>
+  <String Id="Comments">Installs the PY2ECM experimental edition of Thetis, based on MI0BOT v2.10.3.15</String>
 
   <String Id="LicenseRtf" Overridable="yes">Eula-en.rtf</String>
 

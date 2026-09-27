@@ -74,9 +74,9 @@
             this.lblPS.Name = "lblPS";
             this.lblPS.Size = new System.Drawing.Size(44, 24);
             this.lblPS.TabIndex = 33;
-            this.lblPS.Text = "Pure Signal2";
+            this.lblPS.Text = "Pure Signal3";
             this.lblPS.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.toolTip1.SetToolTip(this.lblPS, "PS2 is correcting if \'Correct\' is shown");
+            this.toolTip1.SetToolTip(this.lblPS, "PureSignal is correcting if \'Correct\' is shown");
             // 
             // chkButton2
             // 

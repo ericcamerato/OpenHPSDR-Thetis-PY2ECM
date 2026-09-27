@@ -1,0 +1,20 @@
+Third-party notices
+
+This edition redistributes code and libraries from multiple authors. LICENSE
+covers Thetis/WDSP subject to the notices in each source file.
+LICENSE-DUAL-LICENSING preserves the separate declaration concerning Richard
+Samphire/MW0LGE's contributions.
+
+The executable's NuGet dependencies are listed in
+Project Files/Source/Console/packages.config. The binary ZIP includes
+licenses/NUGET-NOTICES.txt with package names, versions, and license metadata,
+along with available local license texts.
+
+Redistributed native components include FFTW (GPL), RNNoise, libspecbleach
+(LGPL), PortAudio, and FTDI components. The binary ZIP includes their notices
+under licenses/native and the FTDI notice under licenses/nuget. The FTDI
+license has specific conditions for use with FTDI-based products; review its
+text before using that functionality.
+
+This file is an index of notices, not a substitute for the original licenses
+or permission to remove attribution from source files.

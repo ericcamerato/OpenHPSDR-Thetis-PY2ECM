@@ -102,8 +102,10 @@ namespace Thetis
 
 		public static void CreateDSP()
 		{
-            //check for old wdspWisdom00 file - [2.10.3.9]MW0LGE
-            string filePath = Path.Combine(Path.GetDirectoryName(app_data_path), "wdspWisdom00");
+            // WDSP 2.10 reads and writes wdspWisdom01 in the active Thetis
+            // application-data directory.  Checking the parent directory and
+            // the legacy Wisdom00 name caused the rebuild prompt every launch.
+            string filePath = Path.Combine(app_data_path, "wdspWisdom01");
             if (File.Exists(filePath))
             {
                 if (File.GetLastWriteTime(filePath) < DateTime.Now.AddMonths(-3))
@@ -374,6 +376,15 @@ namespace Thetis
             this.RXANR3FixedGain = rx.rx_nr3_fixed_gain;
             this.RXANR4Run = rx.rx_nr4_run;
             this.RXANR4Position = rx.rx_nr4_position;
+            this.RXANNRModel = rx.rx_nnr_model;
+            this.RXANNRRun = rx.rx_nnr_run;
+            this.RXANNRPosition = rx.rx_nnr_position;
+            this.RXANNRMaskFloor = rx.rx_nnr_mask_floor;
+            this.RXANNRMaxGain = rx.rx_nnr_max_gain;
+            this.RXANNRAlpha = rx.rx_nnr_alpha;
+            this.RXANNRAlphaKnee = rx.rx_nnr_alpha_knee;
+            this.RXANNRTau = rx.rx_nnr_tau;
+            this.SetRXANNRSmooth(rx.rx_nnr_smooth_attack, rx.rx_nnr_smooth_release);
             this.RXASBNRreductionAmount = rx.rx_nr4_reductionAmount;
             this.RXASBNRsmoothingFactor = rx.rx_nr4_smoothingFactor;
             this.RXASBNRwhiteningFactor = rx.rx_nr4_whiteningFactor;
@@ -477,6 +488,15 @@ namespace Thetis
             RXANR3FixedGain = rx_nr3_fixed_gain;
             RXANR4Run = rx_nr4_run;
             RXANR4Position = rx_nr4_position;
+            RXANNRModel = rx_nnr_model;
+            RXANNRRun = rx_nnr_run;
+            RXANNRPosition = rx_nnr_position;
+            RXANNRMaskFloor = rx_nnr_mask_floor;
+            RXANNRMaxGain = rx_nnr_max_gain;
+            RXANNRAlpha = rx_nnr_alpha;
+            RXANNRAlphaKnee = rx_nnr_alpha_knee;
+            RXANNRTau = rx_nnr_tau;
+            SetRXANNRSmooth(rx_nnr_smooth_attack, rx_nnr_smooth_release);
             RXASBNRreductionAmount = rx_nr4_reductionAmount;
             RXASBNRsmoothingFactor = rx_nr4_smoothingFactor;
             RXASBNRwhiteningFactor = rx_nr4_whiteningFactor;
@@ -2347,6 +2367,154 @@ namespace Thetis
             }
         }
 
+        // WDSP 2.10 native Deep Neural Network Noise Reduction.
+        // Model 0 is Standard and model 1 is Premium.
+        private int rx_nnr_run = 0;
+        private int rx_nnr_run_dsp = 0;
+        public int RXANNRRun
+        {
+            get { return rx_nnr_run; }
+            set
+            {
+                rx_nnr_run = value;
+                if (update && (value != rx_nnr_run_dsp || force))
+                {
+                    WDSP.SetRXANNRRun(WDSP.id(thread, subrx), value);
+                    rx_nnr_run_dsp = value;
+                }
+            }
+        }
+
+        private int rx_nnr_position = 1;
+        private int rx_nnr_position_dsp = 1;
+        public int RXANNRPosition
+        {
+            get { return rx_nnr_position; }
+            set
+            {
+                rx_nnr_position = value;
+                if (update && (value != rx_nnr_position_dsp || force))
+                {
+                    WDSP.SetRXANNRPosition(WDSP.id(thread, subrx), value);
+                    rx_nnr_position_dsp = value;
+                }
+            }
+        }
+
+        private int rx_nnr_model = 0;
+        private int rx_nnr_model_dsp = -1;
+        public int RXANNRModel
+        {
+            get { return rx_nnr_model; }
+            set
+            {
+                int model = value == 1 ? 1 : 0;
+                rx_nnr_model = model;
+                if (update && (model != rx_nnr_model_dsp || force))
+                {
+                    rx_nnr_model = WDSP.SetRXANNRModel(WDSP.id(thread, subrx), model);
+                    rx_nnr_model_dsp = rx_nnr_model;
+                }
+            }
+        }
+
+        private double rx_nnr_mask_floor = -25.0;
+        private double rx_nnr_mask_floor_dsp = -25.0;
+        public double RXANNRMaskFloor
+        {
+            get { return rx_nnr_mask_floor; }
+            set
+            {
+                rx_nnr_mask_floor = value;
+                if (update && (value != rx_nnr_mask_floor_dsp || force))
+                {
+                    WDSP.SetRXANNRMaskFloor(WDSP.id(thread, subrx), value);
+                    rx_nnr_mask_floor_dsp = value;
+                }
+            }
+        }
+
+        private double rx_nnr_max_gain = 12.0;
+        private double rx_nnr_max_gain_dsp = 12.0;
+        public double RXANNRMaxGain
+        {
+            get { return rx_nnr_max_gain; }
+            set
+            {
+                rx_nnr_max_gain = value;
+                if (update && (value != rx_nnr_max_gain_dsp || force))
+                {
+                    WDSP.SetRXANNRMaxGain(WDSP.id(thread, subrx), value);
+                    rx_nnr_max_gain_dsp = value;
+                }
+            }
+        }
+
+        private double rx_nnr_alpha = 1.0;
+        private double rx_nnr_alpha_dsp = 1.0;
+        public double RXANNRAlpha
+        {
+            get { return rx_nnr_alpha; }
+            set
+            {
+                rx_nnr_alpha = value;
+                if (update && (value != rx_nnr_alpha_dsp || force))
+                {
+                    WDSP.SetRXANNRAlpha(WDSP.id(thread, subrx), value);
+                    rx_nnr_alpha_dsp = value;
+                }
+            }
+        }
+
+        private double rx_nnr_alpha_knee = 10.0;
+        private double rx_nnr_alpha_knee_dsp = 10.0;
+        public double RXANNRAlphaKnee
+        {
+            get { return rx_nnr_alpha_knee; }
+            set
+            {
+                rx_nnr_alpha_knee = value;
+                if (update && (value != rx_nnr_alpha_knee_dsp || force))
+                {
+                    WDSP.SetRXANNRAlphaKnee(WDSP.id(thread, subrx), value);
+                    rx_nnr_alpha_knee_dsp = value;
+                }
+            }
+        }
+
+        private double rx_nnr_tau = 2.0;
+        private double rx_nnr_tau_dsp = 2.0;
+        public double RXANNRTau
+        {
+            get { return rx_nnr_tau; }
+            set
+            {
+                rx_nnr_tau = value;
+                if (update && (value != rx_nnr_tau_dsp || force))
+                {
+                    WDSP.SetRXANNRTau(WDSP.id(thread, subrx), value);
+                    rx_nnr_tau_dsp = value;
+                }
+            }
+        }
+
+        private double rx_nnr_smooth_attack = 0.0;
+        private double rx_nnr_smooth_release = 0.0;
+        private double rx_nnr_smooth_attack_dsp = 0.0;
+        private double rx_nnr_smooth_release_dsp = 0.0;
+        public void SetRXANNRSmooth(double attack_ms, double release_ms)
+        {
+            rx_nnr_smooth_attack = attack_ms;
+            rx_nnr_smooth_release = release_ms;
+            if (update && (attack_ms != rx_nnr_smooth_attack_dsp ||
+                           release_ms != rx_nnr_smooth_release_dsp || force))
+            {
+                WDSP.SetRXANNRSmooth(WDSP.id(thread, subrx), attack_ms, release_ms);
+                rx_nnr_smooth_attack_dsp = attack_ms;
+                rx_nnr_smooth_release_dsp = release_ms;
+            }
+        }
+
         private float rx_nr4_reductionAmount = 10;
         private float rx_nr4_reductionAmount_dsp = 10;
         public float RXASBNRreductionAmount
@@ -2643,6 +2811,7 @@ namespace Thetis
                 }
             }
         }
+
 
         private DSPFilterType filter_type_dsp = DSPFilterType.Low_Latency;
         private DSPFilterType filter_type = DSPFilterType.Low_Latency;

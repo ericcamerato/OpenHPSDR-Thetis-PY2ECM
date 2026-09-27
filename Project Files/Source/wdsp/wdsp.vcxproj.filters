@@ -204,7 +204,40 @@
     <ClInclude Include="sbnr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="FDnoiseIQ.h">
+    <ClInclude Include="extrapolate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nnet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nnet_profile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nnio.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nnr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nurbs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nurbs_fit.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nurbs_spline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="phrot.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="reshb.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="wbfm.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="wdsp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="apfshadow.h">
@@ -410,7 +443,43 @@
     <ClCompile Include="sbnr.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FDnoiseIQ.c">
+    <ClCompile Include="extrapolate.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nnet.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nnio.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nnr.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nnr_model_0.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nnr_model_1.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nurbs.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nurbs_fit.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nurbs_spline.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="phrot.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="reshb.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="snoop.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="wbfm.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="apfshadow.c">

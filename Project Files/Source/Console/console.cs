@@ -1483,6 +1483,16 @@ namespace Thetis
                 if (showHelpInfo()) return;  // if we can show, instantly exit
             }
 
+            if (DateTime.UtcNow >= TitleBar.BetaExpirationUtc)
+            {
+                MessageBox.Show(
+                    "Thetis PY2ECM Beta 1 expired on 25 December 2026 (UTC).\n\n" +
+                    "Please install a newer release. Your databases have not been changed.",
+                    "Beta 1 expired", MessageBoxButtons.OK, MessageBoxIcon.Information,
+                    MessageBoxDefaultButton.Button1, Common.MB_TOPMOST);
+                return;
+            }
+
             //[2.10.3.12]MW0LGE command line adaptor select
             if (Common.HasArg(args, "-adaptor"))
             {
@@ -2857,7 +2867,12 @@ namespace Thetis
             a.Add("last_radio_protocol/" + Audio.LastRadioProtocol.ToString());
             a.Add("last_radio_hardware/" + Audio.LastRadioHardware.ToString());
 
-            a.Add("nr_selected/" + nr_selected_to_text());
+            // Keep the legacy keys limited to NR..NR4 so older Thetis builds
+            // sharing this database never receive unknown NR5/NR6 values.
+            a.Add("nr_selected/" + legacy_nr_selected_to_text());
+            a.Add("nr_selected_by_mode/" + legacy_nr_selected_by_mode_to_text());
+            a.Add("agc_selected_by_mode/" + agc_selected_by_mode_to_text());
+            a.Add("anf_selected_by_mode/" + anf_selected_by_mode_to_text());
 
             a.Add("chkNB_checkstate/" + chkNB.CheckState.ToString());
             a.Add("chkRX2NB_checkstate/" + chkRX2NB.CheckState.ToString());
@@ -3375,6 +3390,13 @@ namespace Thetis
 
             DB.PurgeNotches();
             DB.SaveVars("State", a, true);
+
+            // Store WDSP 2.10-only selections outside the legacy State group.
+            // Older Thetis builds can save their State without deleting these.
+            List<string> wdsp210State = new List<string>();
+            wdsp210State.Add("nr_selected/" + nr_selected_to_text());
+            wdsp210State.Add("nr_selected_by_mode/" + nr_selected_by_mode_to_text());
+            DB.SaveVars("PY2ECM_WDSP210", wdsp210State, true);
         }
 
         //        public void SaveState()
@@ -5055,6 +5077,15 @@ namespace Thetis
                     case "nr_selected":
                         nr_selected_from_text(val);
                         break;
+                    case "nr_selected_by_mode":
+                        nr_selected_by_mode_from_text(val);
+                        break;
+                    case "agc_selected_by_mode":
+                        agc_selected_by_mode_from_text(val);
+                        break;
+                    case "anf_selected_by_mode":
+                        anf_selected_by_mode_from_text(val);
+                        break;
                     case "chkNB_checkstate":
                         chkNB.CheckState = (CheckState)(Enum.Parse(typeof(CheckState), val));
                         break;
@@ -5117,6 +5148,24 @@ namespace Thetis
 
                     case var nam when name.StartsWith("ptb"):
                         if (ctrls.ContainsKey(name)) ((PrettyTrackBar)ctrls[name]).Value = Int32.Parse(val);
+                        break;
+                }
+            }
+
+            // Apply the extended NR5/NR6 state after the legacy state. This
+            // separate group survives saving from an older shared-db build.
+            foreach (string s in DB.GetVars("PY2ECM_WDSP210"))
+            {
+                string[] vals = s.Split(new char[] { '/' }, 2);
+                if (vals.Length != 2) continue;
+
+                switch (vals[0])
+                {
+                    case "nr_selected":
+                        nr_selected_from_text(vals[1]);
+                        break;
+                    case "nr_selected_by_mode":
+                        nr_selected_by_mode_from_text(vals[1]);
                         break;
                 }
             }
@@ -6567,6 +6616,35 @@ namespace Thetis
             if (IsSetupFormNull) return 1000;
 
             return SetupForm.GetPAGain(b, nDriveValue);
+        }
+
+        // Keep TXBand mapped to the neighbouring amateur band for filters, antennas,
+        // limits and other existing consumers, but select PA gain from the actual
+        // extended-frequency segment (for example 25-28 MHz uses B11M).
+        private Band GetPAGainBand(Band fallbackBand)
+        {
+            if (HardwareSpecific.Model != HPSDRModel.HERMESLITE || !extended || tx_xvtr_index >= 0)
+                return fallbackBand;
+
+            Band frequencyBand = BandByFreq(TXFreq, -1, current_region);
+            switch (frequencyBand)
+            {
+                case Band.B25M:
+                case Band.B22M:
+                case Band.B19M:
+                case Band.B16M:
+                case Band.B14M:
+                case Band.B13M:
+                case Band.B11M:
+                    return frequencyBand;
+                default:
+                    return fallbackBand;
+            }
+        }
+
+        public Band GetPAGainBandForCurrentTX()
+        {
+            return GetPAGainBand(TXBand);
         }
 
         public void CheckSelectedButtonColor()
@@ -18551,7 +18629,7 @@ namespace Thetis
             {
                 value = Math.Max(0, value);			// lower bound
 
-                if (HardwareSpecific.Model == HPSDRModel.HERMESLITE) // Mi0BOT: Limit upper bound for HL2
+                if (HardwareSpecific.Model == HPSDRModel.HERMESLITE) // MI0BOT: Limit upper bound for HL2
                     value = Math.Min(90, value);		// upper bound
                 else
                     value = Math.Min(100, value);		// upper bound
@@ -28668,6 +28746,7 @@ namespace Thetis
             lblAGCLabel.Text = "AGC: " + comboAGC.Text;
 
             m_RX1agcMode = (AGCMode)comboAGC.SelectedIndex; // MW0LGE
+            remember_agc_for_current_mode(1);
 
             // set whether custom controls are active
             switch ((AGCMode)comboAGC.SelectedIndex)
@@ -30090,6 +30169,41 @@ namespace Thetis
         private PreampMode temp_mode = PreampMode.HPSDR_OFF; // HPSDR preamp mode
         private PreampMode temp_mode2 = PreampMode.HPSDR_OFF; // HPSDR preamp mode
 
+        // Suppress the HL2 RX audio transient during digital TX without changing AF controls or profiles.
+        private bool _hl2_digital_tx_rx_audio_muted = false;
+        private double _hl2_digital_tx_rx1_gain;
+        private double _hl2_digital_tx_rx1_sub_gain;
+        private double _hl2_digital_tx_rx2_gain;
+
+        private void SetHL2DigitalTXRXAudioMute(bool mute)
+        {
+            if (mute)
+            {
+                if (_hl2_digital_tx_rx_audio_muted || HardwareSpecific.Model != HPSDRModel.HERMESLITE)
+                    return;
+
+                DSPMode tx_mode = radio.GetDSPTX(0).CurrentDSPMode;
+                if (tx_mode != DSPMode.DIGL && tx_mode != DSPMode.DIGU)
+                    return;
+
+                _hl2_digital_tx_rx1_gain = radio.GetDSPRX(0, 0).RXOutputGain;
+                _hl2_digital_tx_rx1_sub_gain = radio.GetDSPRX(0, 1).RXOutputGain;
+                _hl2_digital_tx_rx2_gain = radio.GetDSPRX(1, 0).RXOutputGain;
+
+                radio.GetDSPRX(0, 0).RXOutputGain = 0.0;
+                radio.GetDSPRX(0, 1).RXOutputGain = 0.0;
+                radio.GetDSPRX(1, 0).RXOutputGain = 0.0;
+                _hl2_digital_tx_rx_audio_muted = true;
+            }
+            else if (_hl2_digital_tx_rx_audio_muted)
+            {
+                radio.GetDSPRX(0, 0).RXOutputGain = _hl2_digital_tx_rx1_gain;
+                radio.GetDSPRX(0, 1).RXOutputGain = _hl2_digital_tx_rx1_sub_gain;
+                radio.GetDSPRX(1, 0).RXOutputGain = _hl2_digital_tx_rx2_gain;
+                _hl2_digital_tx_rx_audio_muted = false;
+            }
+        }
+
         private bool _forceATTwhenPSAoff = true; //MW0LGE [2.9.0.7] added
         public bool ForceATTwhenPSAoff
         {
@@ -30325,6 +30439,8 @@ namespace Thetis
                 }
             }
 
+            if (tx) SetHL2DigitalTXRXAudioMute(true);
+
             _pause_DisplayThread = true; // MW0LGE_21k8 turn display off whilst everything is being setup, prevents flashes of pixels etc
 
             if (tx)                     // change to TX mode
@@ -30478,6 +30594,7 @@ namespace Thetis
 
             if (!tx)
             {
+                SetHL2DigitalTXRXAudioMute(false);
                 pa_fwd_power = 0;
                 pa_rev_power = 0;
                 HighSWR = false;
@@ -34770,6 +34887,9 @@ namespace Thetis
             bool bTurnOffSettingsForDigimode = false;
 
             DSPMode old_mode = _rx1_dsp_mode;
+            int new_mode_nr = selected_nr_for_mode(1, new_mode);
+            AGCMode new_mode_agc = selected_agc_for_mode(1, new_mode);
+            bool new_mode_anf = selected_anf_for_mode(1, new_mode);
 
             WDSP.SetChannelState(WDSP.id(0, 1), 0, 0);              // turn off the DSP channels
             WDSP.SetChannelState(WDSP.id(0, 0), 0, 1);
@@ -35459,7 +35579,13 @@ namespace Thetis
             if (bTurnOffSettingsForDigimode) SetDigiMode(1, DigiMode.DigiModeSettingState.dmssTurnOffSettings);
 
             //MW0LGE_21b
-            if (old_mode != new_mode) ModeChangeHandlers?.Invoke(1, old_mode, new_mode, oldBand, RX1Band);
+            if (old_mode != new_mode)
+            {
+                restore_agc_for_mode(1, new_mode, new_mode_agc);
+                restore_anf_for_mode(1, new_mode, new_mode_anf);
+                restore_nr_for_mode(1, new_mode, new_mode_nr);
+                ModeChangeHandlers?.Invoke(1, old_mode, new_mode, oldBand, RX1Band);
+            }
         }
 
         private void radModeButton_CheckedChanged(object sender, System.EventArgs e)
@@ -37245,6 +37371,7 @@ namespace Thetis
                 ANFChangedHandlers?.Invoke(1, _old_anf_state_changed[0], chkANF.Checked);
                 _old_anf_state_changed[0] = chkANF.Checked;
             }
+            remember_anf_for_current_mode(1);
         }
 
         private bool[] _old_snb_state_changed = new bool[] { false, false }; // per rx
@@ -38508,6 +38635,9 @@ namespace Thetis
 
             Band oldBand = RX2Band; //MW0LGE_21d
             DSPMode old_mode = _rx2_dsp_mode;
+            int new_mode_nr = selected_nr_for_mode(2, new_mode);
+            AGCMode new_mode_agc = selected_agc_for_mode(2, new_mode);
+            bool new_mode_anf = selected_anf_for_mode(2, new_mode);
 
             WDSP.SetChannelState(WDSP.id(2, 0), 0, 1);              // turn OFF the DSP channel
 
@@ -39036,7 +39166,13 @@ namespace Thetis
                 WDSP.SetChannelState(WDSP.id(2, 0), 1, 0);              // turn ON the DSP channel
 
             //MW0LGE_21b
-            if (old_mode != new_mode) ModeChangeHandlers?.Invoke(2, old_mode, new_mode, oldBand, RX2Band);
+            if (old_mode != new_mode)
+            {
+                restore_agc_for_mode(2, new_mode, new_mode_agc);
+                restore_anf_for_mode(2, new_mode, new_mode_anf);
+                restore_nr_for_mode(2, new_mode, new_mode_nr);
+                ModeChangeHandlers?.Invoke(2, old_mode, new_mode, oldBand, RX2Band);
+            }
         }
 
         private void radRX2ModeButton_CheckedChanged(object sender, System.EventArgs e)
@@ -39421,6 +39557,7 @@ namespace Thetis
                 ANFChangedHandlers?.Invoke(2, _old_anf_state_changed[1], chkRX2ANF.Checked);
                 _old_anf_state_changed[1] = chkRX2ANF.Checked;
             }
+            remember_anf_for_current_mode(2);
         }
 
         private void chkRX2BIN_CheckedChanged(object sender, System.EventArgs e)
@@ -40436,6 +40573,7 @@ namespace Thetis
             lblRX2AGCLabel.Text = "AGC: " + comboRX2AGC.Text;
 
             m_RX2agcMode = (AGCMode)comboRX2AGC.SelectedIndex; // MW0LGE
+            remember_agc_for_current_mode(2);
 
             switch ((AGCMode)comboRX2AGC.SelectedIndex)
             {
@@ -43492,6 +43630,18 @@ namespace Thetis
                         SelectNR(1, true, is_on ? 0 : 4);
                     }
                     break;
+                case "NR5 (NNR Standard)":
+                    {
+                        bool is_on = _nr_selected[0] == 5;
+                        SelectNR(1, true, is_on ? 0 : 5);
+                    }
+                    break;
+                case "NR6 (NNR Premium)":
+                    {
+                        bool is_on = _nr_selected[0] == 6;
+                        SelectNR(1, true, is_on ? 0 : 6);
+                    }
+                    break;
                 case "ANF":
                     chkANF.Checked = !chkANF.Checked;
                     break;
@@ -43551,6 +43701,18 @@ namespace Thetis
                     {
                         bool is_on = _nr_selected[1] == 4;
                         SelectNR(2, true, is_on ? 0 : 4);
+                    }
+                    break;
+                case "NR5 (NNR Standard)":
+                    {
+                        bool is_on = _nr_selected[1] == 5;
+                        SelectNR(2, true, is_on ? 0 : 5);
+                    }
+                    break;
+                case "NR6 (NNR Premium)":
+                    {
+                        bool is_on = _nr_selected[1] == 6;
+                        SelectNR(2, true, is_on ? 0 : 6);
                     }
                     break;
                 case "ANF":
@@ -44253,6 +44415,325 @@ namespace Thetis
         }
 
         private int[] _nr_selected = new int[]{ 0, 0 }; // the current NR for each rx
+        private int[,] _nr_selected_by_mode = new int[2, (int)DSPMode.LAST];
+        private bool _nr_selected_by_mode_loaded = false;
+        private bool _restoring_nr_selected_by_mode = false;
+        private AGCMode[,] _agc_selected_by_mode = new AGCMode[2, (int)DSPMode.LAST];
+        private bool _agc_selected_by_mode_loaded = false;
+        private bool _restoring_agc_selected_by_mode = false;
+        private bool[,] _anf_selected_by_mode = new bool[2, (int)DSPMode.LAST];
+        private bool _anf_selected_by_mode_loaded = false;
+        private bool _restoring_anf_selected_by_mode = false;
+
+        private void ensure_agc_selected_by_mode()
+        {
+            if (_agc_selected_by_mode_loaded) return;
+
+            AGCMode rx1_agc = RX1AGCMode > AGCMode.FIRST && RX1AGCMode < AGCMode.LAST ? RX1AGCMode : AGCMode.MED;
+            AGCMode rx2_agc = RX2AGCMode > AGCMode.FIRST && RX2AGCMode < AGCMode.LAST ? RX2AGCMode : AGCMode.MED;
+            for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+            {
+                _agc_selected_by_mode[0, mode] = rx1_agc;
+                _agc_selected_by_mode[1, mode] = rx2_agc;
+            }
+            _agc_selected_by_mode_loaded = true;
+        }
+
+        private void agc_selected_by_mode_from_text(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            string[] receivers = text.Split('|');
+            if (receivers.Length != 2) return;
+
+            AGCMode[,] values = new AGCMode[2, (int)DSPMode.LAST];
+            for (int rx = 0; rx < receivers.Length; rx++)
+            {
+                string[] modes = receivers[rx].Split(',');
+                if (modes.Length != (int)DSPMode.LAST) return;
+
+                for (int mode = 0; mode < modes.Length; mode++)
+                {
+                    if (!int.TryParse(modes[mode], out int agc) || agc < 0 || agc >= (int)AGCMode.LAST) return;
+                    values[rx, mode] = (AGCMode)agc;
+                }
+            }
+
+            _agc_selected_by_mode = values;
+            _agc_selected_by_mode_loaded = true;
+        }
+
+        private string agc_selected_by_mode_to_text()
+        {
+            ensure_agc_selected_by_mode();
+            string ret = "";
+            for (int rx = 0; rx < 2; rx++)
+            {
+                if (rx > 0) ret += "|";
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    if (mode > 0) ret += ",";
+                    ret += ((int)_agc_selected_by_mode[rx, mode]).ToString();
+                }
+            }
+            return ret;
+        }
+
+        private void ensure_anf_selected_by_mode()
+        {
+            if (_anf_selected_by_mode_loaded) return;
+
+            for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+            {
+                _anf_selected_by_mode[0, mode] = chkANF.Checked;
+                _anf_selected_by_mode[1, mode] = chkRX2ANF.Checked;
+            }
+            _anf_selected_by_mode_loaded = true;
+        }
+
+        private void anf_selected_by_mode_from_text(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            string[] receivers = text.Split('|');
+            if (receivers.Length != 2) return;
+
+            bool[,] values = new bool[2, (int)DSPMode.LAST];
+            for (int rx = 0; rx < receivers.Length; rx++)
+            {
+                string[] modes = receivers[rx].Split(',');
+                if (modes.Length != (int)DSPMode.LAST) return;
+
+                for (int mode = 0; mode < modes.Length; mode++)
+                {
+                    if (modes[mode] != "0" && modes[mode] != "1") return;
+                    values[rx, mode] = modes[mode] == "1";
+                }
+            }
+
+            _anf_selected_by_mode = values;
+            _anf_selected_by_mode_loaded = true;
+        }
+
+        private string anf_selected_by_mode_to_text()
+        {
+            ensure_anf_selected_by_mode();
+            string ret = "";
+            for (int rx = 0; rx < 2; rx++)
+            {
+                if (rx > 0) ret += "|";
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    if (mode > 0) ret += ",";
+                    ret += _anf_selected_by_mode[rx, mode] ? "1" : "0";
+                }
+            }
+            return ret;
+        }
+
+        private void ensure_nr_selected_by_mode()
+        {
+            if (_nr_selected_by_mode_loaded) return;
+
+            for (int rx = 0; rx < _nr_selected.Length; rx++)
+            {
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    _nr_selected_by_mode[rx, mode] = _nr_selected[rx];
+                }
+            }
+
+            _nr_selected_by_mode_loaded = true;
+        }
+
+        private void nr_selected_by_mode_from_text(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            string[] receivers = text.Split('|');
+            if (receivers.Length != _nr_selected.Length) return;
+
+            int[,] values = new int[2, (int)DSPMode.LAST];
+            for (int rx = 0; rx < receivers.Length; rx++)
+            {
+                string[] modes = receivers[rx].Split(',');
+                if (modes.Length != (int)DSPMode.LAST) return;
+
+                for (int mode = 0; mode < modes.Length; mode++)
+                {
+                    if (!int.TryParse(modes[mode], out int nr) || nr < 0 || nr > 6) return;
+                    values[rx, mode] = nr;
+                }
+            }
+
+            _nr_selected_by_mode = values;
+            _nr_selected_by_mode_loaded = true;
+        }
+
+        private string nr_selected_by_mode_to_text()
+        {
+            ensure_nr_selected_by_mode();
+
+            string ret = "";
+            for (int rx = 0; rx < _nr_selected.Length; rx++)
+            {
+                if (rx > 0) ret += "|";
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    if (mode > 0) ret += ",";
+                    ret += _nr_selected_by_mode[rx, mode].ToString();
+                }
+            }
+            return ret;
+        }
+
+        private string legacy_nr_selected_by_mode_to_text()
+        {
+            ensure_nr_selected_by_mode();
+
+            string ret = "";
+            for (int rx = 0; rx < _nr_selected.Length; rx++)
+            {
+                if (rx > 0) ret += "|";
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    if (mode > 0) ret += ",";
+                    int nr = _nr_selected_by_mode[rx, mode];
+                    ret += (nr <= 4 ? nr : 0).ToString();
+                }
+            }
+            return ret;
+        }
+
+        private DSPMode nr_mode_for_rx(int rx)
+        {
+            return rx == 1 ? _rx1_dsp_mode : _rx2_dsp_mode;
+        }
+
+        private void remember_agc_for_current_mode(int rx)
+        {
+            if (_restoring_agc_selected_by_mode || rx < 1 || rx > 2) return;
+
+            DSPMode mode = nr_mode_for_rx(rx);
+            if (mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+            if (rx == 1 && QSKEnabled && (mode == DSPMode.CWL || mode == DSPMode.CWU)) return;
+
+            ensure_agc_selected_by_mode();
+            _agc_selected_by_mode[rx - 1, (int)mode] = rx == 1 ? RX1AGCMode : RX2AGCMode;
+        }
+
+        private AGCMode selected_agc_for_mode(int rx, DSPMode mode)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return AGCMode.MED;
+
+            ensure_agc_selected_by_mode();
+            return _agc_selected_by_mode[rx - 1, (int)mode];
+        }
+
+        private void restore_agc_for_mode(int rx, DSPMode mode, AGCMode agc)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+            if (rx == 1 && QSKEnabled && (mode == DSPMode.CWL || mode == DSPMode.CWU)) return;
+
+            ensure_agc_selected_by_mode();
+            try
+            {
+                _restoring_agc_selected_by_mode = true;
+                _agc_selected_by_mode[rx - 1, (int)mode] = agc;
+                if (rx == 1) RX1AGCMode = agc;
+                else RX2AGCMode = agc;
+            }
+            finally
+            {
+                _restoring_agc_selected_by_mode = false;
+            }
+        }
+
+        private void remember_anf_for_current_mode(int rx)
+        {
+            if (_restoring_anf_selected_by_mode || rx < 1 || rx > 2) return;
+
+            DSPMode mode = nr_mode_for_rx(rx);
+            if (mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+
+            ensure_anf_selected_by_mode();
+            _anf_selected_by_mode[rx - 1, (int)mode] = rx == 1 ? chkANF.Checked : chkRX2ANF.Checked;
+        }
+
+        private bool selected_anf_for_mode(int rx, DSPMode mode)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return false;
+
+            ensure_anf_selected_by_mode();
+            return _anf_selected_by_mode[rx - 1, (int)mode];
+        }
+
+        private void restore_anf_for_mode(int rx, DSPMode mode, bool anf)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+
+            CheckBoxTS control = rx == 1 ? chkANF : chkRX2ANF;
+            if (!control.Enabled) return;
+
+            ensure_anf_selected_by_mode();
+            try
+            {
+                _restoring_anf_selected_by_mode = true;
+                _anf_selected_by_mode[rx - 1, (int)mode] = anf;
+                if (control.Checked != anf)
+                {
+                    control.Checked = anf;
+                }
+                else if (rx == 1)
+                {
+                    chkANF_CheckedChanged(this, EventArgs.Empty);
+                }
+                else
+                {
+                    chkRX2ANF_CheckedChanged(this, EventArgs.Empty);
+                }
+            }
+            finally
+            {
+                _restoring_anf_selected_by_mode = false;
+            }
+        }
+
+        private void remember_nr_for_current_mode(int rx)
+        {
+            if (_restoring_nr_selected_by_mode || rx < 1 || rx > 2) return;
+
+            DSPMode mode = nr_mode_for_rx(rx);
+            if (mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+
+            ensure_nr_selected_by_mode();
+            _nr_selected_by_mode[rx - 1, (int)mode] = _nr_selected[rx - 1];
+        }
+
+        private int selected_nr_for_mode(int rx, DSPMode mode)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return 0;
+
+            ensure_nr_selected_by_mode();
+            return _nr_selected_by_mode[rx - 1, (int)mode];
+        }
+
+        private void restore_nr_for_mode(int rx, DSPMode mode, int nr)
+        {
+            if (rx < 1 || rx > 2 || mode <= DSPMode.FIRST || mode >= DSPMode.LAST) return;
+
+            ensure_nr_selected_by_mode();
+            try
+            {
+                _restoring_nr_selected_by_mode = true;
+                _nr_selected_by_mode[rx - 1, (int)mode] = nr;
+                SelectNR(rx, true, nr);
+            }
+            finally
+            {
+                _restoring_nr_selected_by_mode = false;
+            }
+        }
         private void nr_selected_from_text(string text)
         {
             if (string.IsNullOrEmpty(text)) return;
@@ -44270,7 +44751,7 @@ namespace Thetis
             {
                 if (int.TryParse(parts[i], out int nr))
                 {
-                    _nr_selected[i] = nr;
+                    _nr_selected[i] = Math.Max(0, Math.Min(6, nr));
                 }
             }
 
@@ -44290,6 +44771,17 @@ namespace Thetis
             if (ret.EndsWith("|")) ret = ret.Substring(0, ret.Length - 1);
             return ret;
         }
+        private string legacy_nr_selected_to_text()
+        {
+            string ret = "";
+            for (int i = 0; i < _nr_selected.Length; i++)
+            {
+                int nr = _nr_selected[i];
+                ret += (nr <= 4 ? nr : 0).ToString() + "|";
+            }
+            if (ret.EndsWith("|")) ret = ret.Substring(0, ret.Length - 1);
+            return ret;
+        }
         private void incrementNR(int rx)
         {
             if (rx < 1 || rx > 2) return;
@@ -44297,17 +44789,18 @@ namespace Thetis
             int old_nr = _nr_selected[rx - 1];
 
             _nr_selected[rx - 1] += 1;
-            if (_nr_selected[rx - 1] > 4) _nr_selected[rx - 1] = 0;
+            if (_nr_selected[rx - 1] > 6) _nr_selected[rx - 1] = 0;
 
             setupNR(rx, false);
             setupNR(rx, true);
+            remember_nr_for_current_mode(rx);
 
             if (_nr_selected[rx - 1] != old_nr) NRChangedHandlers?.Invoke(rx, old_nr, _nr_selected[rx - 1]);
         }
         public void SelectNR(int rx, bool incude_sub, int nr)
         {
             if (rx < 1 || rx > 2) return;
-            if (nr < 0 || nr > 4) return;
+            if (nr < 0 || nr > 6) return;
 
             int old_nr = _nr_selected[rx - 1];
 
@@ -44315,6 +44808,7 @@ namespace Thetis
 
             setupNR(rx, false);
             if(incude_sub) setupNR(rx, true);
+            remember_nr_for_current_mode(rx);
 
             if (_nr_selected[rx - 1] != old_nr) NRChangedHandlers?.Invoke(rx, old_nr, _nr_selected[rx - 1]);
         }
@@ -44332,6 +44826,21 @@ namespace Thetis
 
             RadioDSPRX rad = radio.GetDSPRX(rx - 1, sub ? 1 : 0);
 
+            // Every NR implementation is mutually exclusive. NNR is explicitly
+            // stopped before selecting a legacy NR, and re-enabled only for NR5/6.
+            rad.RXANNRRun = 0;
+
+            if (rx == 1)
+            {
+                NR5ToolStripMenuItem.Checked = false;
+                NR6ToolStripMenuItem.Checked = false;
+            }
+            else
+            {
+                NR5ToolStripMenuItem_rx2.Checked = false;
+                NR6ToolStripMenuItem_rx2.Checked = false;
+            }
+
             nR2ToolStripMenuItem.Checked = false;
             NR2StripMenuItem2.Checked = false;
             cat_rx2_nr_status = 0;
@@ -44339,7 +44848,7 @@ namespace Thetis
 
             int nr = _nr_selected[rx - 1];
             if (nr < 0) nr = 0;
-            if (nr > 4) nr = 4;
+            if (nr > 6) nr = 6;
 
             switch (nr)
             {
@@ -44499,6 +45008,45 @@ namespace Thetis
                             NR4ToolStripMenuItem_rx2.Checked = true;
                             chkRX2NR.Text = "NR4";
                             lblRX2NRLabel.Text = "NR4";
+                            chkRX2NR.Checked = true;
+                            break;
+                    }
+                    break;
+                case 5: // WDSP 2.10 NNR Standard
+                case 6: // WDSP 2.10 NNR Premium
+                    rad.RXANR4Run = 0;
+                    rad.RXANR3Run = 0;
+                    rad.RXANR2Run = 0;
+                    rad.RXANR1Run = 0;
+                    rad.RXANNRModel = nr == 5 ? 0 : 1;
+                    rad.RXANNRRun = 1;
+
+                    switch (rx)
+                    {
+                        case 1:
+                            cat_nr_status = 0;
+                            cat_nr2_status = 0;
+                            NRToolStripMenuItem.Checked = false;
+                            NR2ToolStripMenuItem1.Checked = false;
+                            NR3ToolStripMenuItem.Checked = false;
+                            NR4ToolStripMenuItem.Checked = false;
+                            NR5ToolStripMenuItem.Checked = nr == 5;
+                            NR6ToolStripMenuItem.Checked = nr == 6;
+                            chkNR.Text = nr == 5 ? "NR5" : "NR6";
+                            lblNRLabel.Text = chkNR.Text;
+                            chkNR.Checked = true;
+                            break;
+                        case 2:
+                            cat_rx2_nr_status = 0;
+                            cat_rx2_nr2_status = 0;
+                            nR2ToolStripMenuItem.Checked = false;
+                            NR2StripMenuItem2.Checked = false;
+                            NR3ToolStripMenuItem_rx2.Checked = false;
+                            NR4ToolStripMenuItem_rx2.Checked = false;
+                            NR5ToolStripMenuItem_rx2.Checked = nr == 5;
+                            NR6ToolStripMenuItem_rx2.Checked = nr == 6;
+                            chkRX2NR.Text = nr == 5 ? "NR5" : "NR6";
+                            lblRX2NRLabel.Text = chkRX2NR.Text;
                             chkRX2NR.Checked = true;
                             break;
                     }
@@ -45475,12 +46023,19 @@ namespace Thetis
         }
         private void chkNR_MouseDown(object sender, MouseEventArgs e)
         {
-            if (IsRightButton(e)) SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab);
+            if (IsRightButton(e)) ShowSelectedNRSetupTab(1);
         }
 
         private void chkRX2NR_MouseDown(object sender, MouseEventArgs e)
         {
-            if (IsRightButton(e)) SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab);
+            if (IsRightButton(e)) ShowSelectedNRSetupTab(2);
+        }
+
+        private void ShowSelectedNRSetupTab(int rx)
+        {
+            int nr = GetSelectedNR(rx);
+            SetupForm.ShowSetupTab(nr == 5 || nr == 6
+                ? Setup.SetupTab.NNR_Tab : Setup.SetupTab.NR_Tab);
         }
 
         private void chkNB_MouseDown(object sender, MouseEventArgs e)
@@ -47828,7 +48383,7 @@ namespace Thetis
             }
             else
             {
-                gbb = GainByBand(TXBand, new_pwr);
+                gbb = GainByBand(GetPAGainBand(TXBand), new_pwr);
             }
             target_dbm -= gbb;
 
@@ -52681,6 +53236,8 @@ namespace Thetis
             switch (id)
             {
                 case OtherButtonId.NR:
+                    ShowSelectedNRSetupTab(rx);
+                    break;
                 case OtherButtonId.NR1:
                 case OtherButtonId.NR2:
                 case OtherButtonId.NR3:

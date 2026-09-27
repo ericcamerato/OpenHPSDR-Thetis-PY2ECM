@@ -83,7 +83,7 @@ namespace Thetis
         private readonly List<string> CMASIO_ALWAYS_SHOW = new List<string>() {  "dl5tt", "dh1klm", "ea8djr", "ei7bmb", "kc1lko", "k1lsb", "k1sr", "k2gx", "k2tc", "kb2uka",
                                                                                  "ki4tga", "ko6dlv", "kw4ex", "m0cke", "mw0lge", "n6mud", "nc3z", "nj2us",
                                                                                  "nr0v", "ny8t", "oe3ide", "oz1ct", "sa3atf", "ve2jn", "ve9iou", "vk6ia",
-                                                                                 "w1aex", "w1izz", "wr1s", "w2pa", "w3ub", "w9ac", "w9ez", "mi0bot" };
+                                                                                 "w1aex", "w1izz", "wr1s", "w2pa", "w3ub", "w9ac", "w9ez", "mi0bot", "py2ecm" };
         #region Variable Declaration
 
         private Console console;
@@ -101,6 +101,10 @@ namespace Thetis
         private bool m_bShown = false; // used by the selective restore system to know accurate window state
 
         private frmBandwidth _frmBandwidth;
+
+        // WDSP 2.10 NNR controls are created here instead of in the generated
+        // designer file to keep the PY2ECM changes small and merge-friendly.
+        private readonly NumericUpDownTS[,] nudNNR = new NumericUpDownTS[2, 7];
 
         #endregion
 
@@ -124,12 +128,186 @@ namespace Thetis
             console = c;
             this.Owner = c;
 
+            InitializeNNRControls();
+
             _frmBandwidth = new frmBandwidth();
 
             LogTool.Completed("INITCOMPSETUP");
 
             //everything here moved to AfterConstructor, which is called during singleton instance // G7KLJ's idea/implementation
         }
+
+        private void InitializeNNRControls()
+        {
+            LabelTS description = new LabelTS
+            {
+                Name = "lblNNRDescription",
+                AutoSize = false,
+                Location = new Point(10, 8),
+                Size = new Size(700, 34),
+                Text = "WDSP 2.10 neural noise reduction. Settings are shared by NR5 Standard and NR6 Premium. Changes apply live."
+            };
+            tpDSPNNR.Controls.Add(description);
+
+            tpDSPNNR.Controls.Add(CreateNNRGroup(0, "NNR RX1", 8));
+            tpDSPNNR.Controls.Add(CreateNNRGroup(1, "NNR RX2", 360));
+        }
+
+        private GroupBoxTS CreateNNRGroup(int receiver, string title, int left)
+        {
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = receiver == 0 ? "grpNNRRX1" : "grpNNRRX2",
+                Text = title,
+                Location = new Point(left, 45),
+                Size = new Size(344, 350)
+            };
+
+            string suffix = receiver == 0 ? "RX1" : "RX2";
+            string[] labels =
+            {
+                "Mask floor", "Maximum gain", "Low-mask alpha", "Alpha knee",
+                "Adaptation time", "Smoothing attack", "Smoothing release"
+            };
+            string[] units = { "dB", "dB", "", "dB", "s", "ms", "ms" };
+            string[] names =
+            {
+                "udNNRMaskFloor", "udNNRMaxGain", "udNNRAlpha", "udNNRAlphaKnee",
+                "udNNRTau", "udNNRSmoothAttack", "udNNRSmoothRelease"
+            };
+            decimal[] minimum = { -60m, 0m, 0m, 0m, 0.05m, 0m, 0m };
+            decimal[] maximum = { 0m, 24m, 4m, 40m, 30m, 500m, 500m };
+            decimal[] increment = { 1m, 1m, 0.05m, 1m, 0.05m, 5m, 5m };
+            decimal[] defaults = { -25m, 12m, 1m, 10m, 2m, 0m, 0m };
+            int[] decimalPlaces = { 0, 0, 2, 0, 2, 0, 0 };
+            string[] tips =
+            {
+                "Minimum spectral mask. Less negative values preserve more voice and noise; more negative values suppress harder.",
+                "Maximum gain allowed after neural masking. Lower values can reduce harsh or cracked peaks.",
+                "Strength below the knee. Values below 1 preserve weak voice components; values above 1 suppress harder.",
+                "Level below which Low-mask alpha is applied.",
+                "Time constant used by the neural input conditioner.",
+                "Attack smoothing of the neural mask. A small value can reduce rough edges.",
+                "Release smoothing of the neural mask. Higher values can reduce musical or cracked artifacts."
+            };
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                int top = 24 + i * 34;
+                LabelTS label = new LabelTS
+                {
+                    Name = "lbl" + names[i].Substring(2) + suffix,
+                    AutoSize = false,
+                    Location = new Point(12, top + 3),
+                    Size = new Size(135, 20),
+                    Text = labels[i]
+                };
+                NumericUpDownTS numeric = new NumericUpDownTS
+                {
+                    Name = names[i] + suffix,
+                    Location = new Point(150, top),
+                    Size = new Size(78, 20),
+                    Minimum = minimum[i],
+                    Maximum = maximum[i],
+                    Increment = increment[i],
+                    DecimalPlaces = decimalPlaces[i],
+                    Value = defaults[i],
+                    TinyStep = false
+                };
+                LabelTS unit = new LabelTS
+                {
+                    Name = "lbl" + names[i].Substring(2) + "Unit" + suffix,
+                    AutoSize = false,
+                    Location = new Point(234, top + 3),
+                    Size = new Size(35, 20),
+                    Text = units[i]
+                };
+
+                toolTip1.SetToolTip(label, tips[i]);
+                toolTip1.SetToolTip(numeric, tips[i]);
+                numeric.ValueChanged += NNRControl_ValueChanged;
+                nudNNR[receiver, i] = numeric;
+                group.Controls.Add(label);
+                group.Controls.Add(numeric);
+                group.Controls.Add(unit);
+            }
+
+            ButtonTS gentle = new ButtonTS
+            {
+                Name = "btnNNRGentle" + suffix,
+                Text = "Voice smooth",
+                Location = new Point(54, 282),
+                Size = new Size(105, 28)
+            };
+            gentle.Click += delegate { SetNNRPreset(receiver, false); };
+            toolTip1.SetToolTip(gentle, "Gentler starting point intended to preserve voice body and reduce NR6 roughness.");
+
+            ButtonTS reset = new ButtonTS
+            {
+                Name = "btnNNRDefaults" + suffix,
+                Text = "WDSP defaults",
+                Location = new Point(174, 282),
+                Size = new Size(105, 28)
+            };
+            reset.Click += delegate { SetNNRPreset(receiver, true); };
+
+            LabelTS hint = new LabelTS
+            {
+                Name = "lblNNRHint" + suffix,
+                AutoSize = false,
+                Location = new Point(12, 317),
+                Size = new Size(320, 26),
+                Text = "Tip: try Voice smooth first, then adjust Mask floor."
+            };
+
+            group.Controls.Add(gentle);
+            group.Controls.Add(reset);
+            group.Controls.Add(hint);
+            return group;
+        }
+
+        private void SetNNRPreset(int receiver, bool wdspDefaults)
+        {
+            decimal[] values = wdspDefaults
+                ? new decimal[] { -25m, 12m, 1m, 10m, 2m, 0m, 0m }
+                : new decimal[] { -18m, 6m, 0.75m, 12m, 3m, 20m, 120m };
+
+            for (int i = 0; i < values.Length; i++)
+                nudNNR[receiver, i].Value = values[i];
+
+            ApplyNNRSettings(receiver);
+        }
+
+        private void NNRControl_ValueChanged(object sender, EventArgs e)
+        {
+            if (sender == null) return;
+            Control control = (Control)sender;
+            ApplyNNRSettings(control.Name.EndsWith("RX2", StringComparison.Ordinal) ? 1 : 0);
+        }
+
+        private void ApplyAllNNRSettings()
+        {
+            ApplyNNRSettings(0);
+            ApplyNNRSettings(1);
+        }
+
+        private void ApplyNNRSettings(int receiver)
+        {
+            if (console == null || nudNNR[receiver, 0] == null) return;
+
+            for (int subrx = 0; subrx < 2; subrx++)
+            {
+                RadioDSPRX rx = console.radio.GetDSPRX(receiver, subrx);
+                rx.RXANNRMaskFloor = (double)nudNNR[receiver, 0].Value;
+                rx.RXANNRMaxGain = (double)nudNNR[receiver, 1].Value;
+                rx.RXANNRAlpha = (double)nudNNR[receiver, 2].Value;
+                rx.RXANNRAlphaKnee = (double)nudNNR[receiver, 3].Value;
+                rx.RXANNRTau = (double)nudNNR[receiver, 4].Value;
+                rx.SetRXANNRSmooth((double)nudNNR[receiver, 5].Value,
+                                  (double)nudNNR[receiver, 6].Value);
+            }
+        }
+
         internal void AfterConstructor()
         {
             LogTool.AddLogEntry("      Setup setup controls...", "SETUP_CONT");
@@ -2583,6 +2761,7 @@ namespace Thetis
             nudNR4_snr_rx2_ValueChanged(this, e);
 
             setupNR4algorithm();
+            ApplyAllNNRSettings();
             //
 
             // Transmit Tab
@@ -4026,31 +4205,39 @@ namespace Thetis
         {
             get
             {
-                if (udATTOnTX != null) return (int)udATTOnTX.Value;
-                else return -1;
+                if (udATTOnTX == null || udATTOnTX.IsDisposed) return -1;
+                if (udATTOnTX.InvokeRequired)
+                    return (int)udATTOnTX.Invoke(new Func<int>(() => (int)udATTOnTX.Value));
+                return (int)udATTOnTX.Value;
             }
             set
             {
-                if (udATTOnTX != null)
+                if (udATTOnTX == null || udATTOnTX.IsDisposed) return;
+                if (udATTOnTX.InvokeRequired)
                 {
-                    if (value > 31) value = 31;
-
-                    if (HPSDRModel.HERMESLITE == HardwareSpecific.Model)
-                    {
-                        if (value < -28) value = -28; //MI0BOT: HL2 has a greater range and can go negative 
-                    }
-                    else
-                    {
-                        if (value < 0) value = 0; //MW0LGE [2.9.0.7] added after mi0bot source review
-                    }
-
-                    lblTXattBand.Text = console.TXBand.ToString();
-                    if (udATTOnTX.Value == value) //[2.10.3.6]MW0LGE no event will fire if the same, so force it
-                        udATTOnTX_ValueChanged(this, EventArgs.Empty);
-                    else
-                        udATTOnTX.Value = value;
+                    udATTOnTX.Invoke(new Action<int>(SetATTOnTXValue), value);
+                    return;
                 }
+                SetATTOnTXValue(value);
             }
+        }
+
+        private void SetATTOnTXValue(int value)
+        {
+            // PureSignal adjusts this value from its worker thread.  Keep the
+            // control range synchronized with HL2 and clamp against the actual
+            // NumericUpDown limits before assigning it.
+            if (HPSDRModel.HERMESLITE == HardwareSpecific.Model && udATTOnTX.Minimum > -28)
+                udATTOnTX.Minimum = -28;
+
+            decimal target = Math.Max(udATTOnTX.Minimum,
+                             Math.Min(udATTOnTX.Maximum, (decimal)value));
+
+            lblTXattBand.Text = console.TXBand.ToString();
+            if (udATTOnTX.Value == target) //[2.10.3.6]MW0LGE no event will fire if the same, so force it
+                udATTOnTX_ValueChanged(this, EventArgs.Empty);
+            else
+                udATTOnTX.Value = target;
         }
 
         public string SerialNumber
@@ -7470,7 +7657,7 @@ namespace Thetis
 
             bool was_enabled = console.RX2Enabled;
 
-            // MW0LGE [2.9.07] always initialise rx2 even if P1. Thanks to Reid (Gi8TME/Mi0BOT) and DH1KLM
+            // MW0LGE [2.9.07] always initialise rx2 even if P1. Thanks to Reid (GI8TME/MI0BOT) and DH1KLM
             // see https://github.com/ramdor/Thetis-2.9.0/issues/66
             //if ((NetworkIO.CurrentRadioProtocol == RadioProtocol.ETH) && (new_rate != old_rate || initializing || m_bForceAudio))
             if (new_rate != old_rate || initializing || m_bForceAudio)
@@ -20473,6 +20660,13 @@ namespace Thetis
                     nud40M.Minimum = 0;
                     nud30M.Minimum = 0;
                     nud20M.Minimum = 0;
+                    nud25M.Minimum = 0;
+                    nud22M.Minimum = 0;
+                    nud19M.Minimum = 0;
+                    nud16M.Minimum = 0;
+                    nud14M.Minimum = 0;
+                    nud13M.Minimum = 0;
+                    nud11M.Minimum = 0;
                     nud17M.Minimum = 0;
                     nud15M.Minimum = 0;
                     nud12M.Minimum = 0;
@@ -20484,6 +20678,13 @@ namespace Thetis
                     nud40M.Increment = 1;
                     nud30M.Increment = 1;
                     nud20M.Increment = 1;
+                    nud25M.Increment = 1;
+                    nud22M.Increment = 1;
+                    nud19M.Increment = 1;
+                    nud16M.Increment = 1;
+                    nud14M.Increment = 1;
+                    nud13M.Increment = 1;
+                    nud11M.Increment = 1;
                     nud17M.Increment = 1;
                     nud15M.Increment = 1;
                     nud12M.Increment = 1;
@@ -20495,6 +20696,13 @@ namespace Thetis
                     nud40M.DecimalPlaces = 0;
                     nud30M.DecimalPlaces = 0;
                     nud20M.DecimalPlaces = 0;
+                    nud25M.DecimalPlaces = 0;
+                    nud22M.DecimalPlaces = 0;
+                    nud19M.DecimalPlaces = 0;
+                    nud16M.DecimalPlaces = 0;
+                    nud14M.DecimalPlaces = 0;
+                    nud13M.DecimalPlaces = 0;
+                    nud11M.DecimalPlaces = 0;
                     nud17M.DecimalPlaces = 0;
                     nud15M.DecimalPlaces = 0;
                     nud12M.DecimalPlaces = 0;
@@ -21160,7 +21368,8 @@ namespace Thetis
             OPTIONS3_Tab,
             PA_Tab,
             HWSET_Tab,
-            OtherHW_PA_Tab
+            OtherHW_PA_Tab,
+            NNR_Tab
         }
         public void ShowSetupTab(SetupTab eTab)
         {
@@ -21183,11 +21392,15 @@ namespace Thetis
                     break;
                 case SetupTab.NR_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 7; // select NR tab
+                    TabDSP.SelectedTab = tpDSPNR;
+                    break;
+                case SetupTab.NNR_Tab:
+                    TabSetup.SelectedIndex = 3;
+                    TabDSP.SelectedTab = tpDSPNNR;
                     break;
                 case SetupTab.NB_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 9; // select NB tab
+                    TabDSP.SelectedTab = tpDSPNB;
                     break;
                 case SetupTab.CW_Tab:
                     TabSetup.SelectedIndex = 3;
@@ -21207,15 +21420,15 @@ namespace Thetis
                     break;
                 case SetupTab.MNF_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 8; // select MNF tab
+                    TabDSP.SelectedTab = tpDSPMNF;
                     break;
                 case SetupTab.VOXDE_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 10; // select VOX/DE tab
+                    TabDSP.SelectedTab = tpDSPVOXDE;
                     break;
                 case SetupTab.CFC_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 11; // select CFC tab
+                    TabDSP.SelectedTab = tpDSPCFC;
                     break;
                 case SetupTab.VAC1_Tab:
                     TabSetup.SelectedIndex = 1; // vac1
@@ -24054,6 +24267,13 @@ namespace Thetis
             nud40M.Value = (decimal)p.GetGainForBand(Band.B40M);
             nud30M.Value = (decimal)p.GetGainForBand(Band.B30M);
             nud20M.Value = (decimal)p.GetGainForBand(Band.B20M);
+            nud25M.Value = (decimal)p.GetGainForBand(Band.B25M);
+            nud22M.Value = (decimal)p.GetGainForBand(Band.B22M);
+            nud19M.Value = (decimal)p.GetGainForBand(Band.B19M);
+            nud16M.Value = (decimal)p.GetGainForBand(Band.B16M);
+            nud14M.Value = (decimal)p.GetGainForBand(Band.B14M);
+            nud13M.Value = (decimal)p.GetGainForBand(Band.B13M);
+            nud11M.Value = (decimal)p.GetGainForBand(Band.B11M);
             nud17M.Value = (decimal)p.GetGainForBand(Band.B17M);
             nud15M.Value = (decimal)p.GetGainForBand(Band.B15M);
             nud12M.Value = (decimal)p.GetGainForBand(Band.B12M);
@@ -24262,22 +24482,36 @@ namespace Thetis
             //nud160M
             //nudVHF0
 
-            bool bVHF = nud.Name.StartsWith("nudVHF");
-            int nNumber = bVHF ? int.Parse(nud.Name.Substring(6)) : int.Parse(nud.Name.Substring(3, nud.Name.Length - 4));
-
             PAProfile p = getPAProfile(comboPAProfile.Text);
             if (p == null) return;
 
-            Band b;
-            if (bVHF)
-                b = (Band)((int)Band.VHF0 + nNumber);
-            else
-                b = (Band)((int)Band.B160M + mapBandMetersToIndex(nNumber));
+            Band b = getBandForPAGainControl(nud);
+            if (b == Band.FIRST) return;
 
             float fOld = p.GetGainForBand(b);
             p.SetGainForBand(b, (float)nud.Value);
 
             if (p.GetGainForBand(b) != fOld) console.PWR = console.PWR; // update the power, which causes these gain values to be queried
+        }
+        private Band getBandForPAGainControl(NumericUpDownTS nud)
+        {
+            if (nud == null) return Band.FIRST;
+            if (nud.Name.StartsWith("nudVHF"))
+                return (Band)((int)Band.VHF0 + int.Parse(nud.Name.Substring(6)));
+
+            switch (nud.Name)
+            {
+                case "nud25M": return Band.B25M;
+                case "nud22M": return Band.B22M;
+                case "nud19M": return Band.B19M;
+                case "nud16M": return Band.B16M;
+                case "nud14M": return Band.B14M;
+                case "nud13M": return Band.B13M;
+                case "nud11M": return Band.B11M;
+            }
+
+            int nMeters = int.Parse(nud.Name.Substring(3, nud.Name.Length - 4));
+            return (Band)((int)Band.B160M + mapBandMetersToIndex(nMeters));
         }
         public float GetPAGain(Band b, int nDriveValue)
         {
@@ -24773,13 +25007,16 @@ namespace Thetis
             PAProfileEnableControls(newMox);
 
             if (newMox)
+            {
+                setAdjustingBand(console.GetPAGainBandForCurrentTX());
                 enabledAllPAnuds(false);
+            }
             else
                 enabledAllPAnuds(true);
         }
         private void OnTXBandChanged(Band oldBand, Band newBand, double tx_frequency)
         {
-            setAdjustingBand(newBand);
+            setAdjustingBand(console.GetPAGainBandForCurrentTX());
             lblTXattBand.Text = newBand.ToString(); //[2.3.10.6]MW0LGE added (also in ATTOnTX)
         }
         private void setAdjustingBand(Band b)
@@ -24790,7 +25027,9 @@ namespace Thetis
                 if (sBand.StartsWith("B")) sBand = sBand.Remove(0, 1);
             }
 
-            if (!((b >= Band.B160M && b <= Band.B6M) || (b >= Band.VHF0 && b <= Band.VHF13)))
+            if (!((b >= Band.B160M && b <= Band.B6M) ||
+                  (b >= Band.VHF0 && b <= Band.VHF13) ||
+                  (b >= Band.B25M && b <= Band.B11M)))
             {
                 _adjustingBand = Band.FIRST; // MW0LGE_[2.9.0.7] reset
                 enabledPAAdjust(false);
@@ -24813,6 +25052,7 @@ namespace Thetis
         }
         public class PAProfile
         {
+            private const string INTERMEDIATE_PA_GAINS_VERSION = "IntermediatePAGainsV1";
             private string _sName = "";
             private HPSDRModel _model;
             private bool _default;
@@ -24886,7 +25126,9 @@ namespace Thetis
             public void DataFromString(string sData)
             {
                 string[] sSplit = sData.Split('|');
-                if ((sSplit.Length == (int)Band.LAST + 3) || (sSplit.Length == (int)Band.LAST + 3 + 378) || (sSplit.Length == (int)Band.LAST + 3 + 378 + 84))
+                bool hasIndependentIntermediateGains = sSplit[sSplit.Length - 1] == INTERMEDIATE_PA_GAINS_VERSION;
+                int dataLength = hasIndependentIntermediateGains ? sSplit.Length - 1 : sSplit.Length;
+                if ((dataLength == (int)Band.LAST + 3) || (dataLength == (int)Band.LAST + 3 + 378) || (dataLength == (int)Band.LAST + 3 + 378 + 84))
                 // + 3 = 3 initial settings
                 // + 378 = the new offsets
                 // + 84 = the new max power and in use
@@ -24930,6 +25172,11 @@ namespace Thetis
                             }
                         }
                     }
+
+                    // Profiles written before the intermediate PA bands had controls used
+                    // the adjacent amateur band. Preserve that behaviour on first load.
+                    if (!hasIndependentIntermediateGains)
+                        SetIntermediateGainsFromAdjacentBands();
                 }
             }
             public string DataToString()
@@ -24958,9 +25205,19 @@ namespace Thetis
                     sData += _maxPower[n].ToString("0.0") + "|";
                 }
 
-                sData = sData.TrimEnd('|');
+                sData += INTERMEDIATE_PA_GAINS_VERSION;
 
                 return sData;
+            }
+            private void SetIntermediateGainsFromAdjacentBands()
+            {
+                _gainValues[(int)Band.B25M] = _gainValues[(int)Band.B20M];
+                _gainValues[(int)Band.B22M] = _gainValues[(int)Band.B20M];
+                _gainValues[(int)Band.B19M] = _gainValues[(int)Band.B17M];
+                _gainValues[(int)Band.B16M] = _gainValues[(int)Band.B17M];
+                _gainValues[(int)Band.B14M] = _gainValues[(int)Band.B15M];
+                _gainValues[(int)Band.B13M] = _gainValues[(int)Band.B12M];
+                _gainValues[(int)Band.B11M] = _gainValues[(int)Band.B10M];
             }
             public float GetGainForBand(Band b, int nDriveValue = -1)
             {
@@ -25094,6 +25351,7 @@ namespace Thetis
 
                     SetGainForBand((Band)n, pa_default_gains[n]);
                 }
+                SetIntermediateGainsFromAdjacentBands();
             }
         }
         private void enabledPAAdjust(bool bEnabled)
@@ -25120,13 +25378,8 @@ namespace Thetis
                 {
                     if (c.Name.StartsWith("nud"))
                     {
-                        bool bVHF = nud.Name.StartsWith("nudVHF");
-                        int nNumber = bVHF ? int.Parse(nud.Name.Substring(6)) : int.Parse(nud.Name.Substring(3, nud.Name.Length - 4));
-                        Band b;
-                        if (bVHF)
-                            b = (Band)((int)Band.VHF0 + nNumber);
-                        else
-                            b = (Band)((int)Band.B160M + mapBandMetersToIndex(nNumber));
+                        Band b = getBandForPAGainControl(nud);
+                        if (b == Band.FIRST) continue;
 
                         if (!bEnabled)
                         {
