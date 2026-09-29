@@ -194,6 +194,7 @@ namespace Thetis
         private RadioButtonTS[] vhf_text;
 
         private bool was_panadapter = false;				// used to restore panadater when switching to spectrum DSP mode
+        private bool was_3d_panadapter = false;
         private bool was_waterfall = false;					// used to restore waterfall when switching to spectrum DSP mode
 
         public float[] rx1_preamp_offset;					// offset values for each preamp mode in dB
@@ -5675,6 +5676,7 @@ namespace Thetis
                 s = s.Substring(0, 1).ToUpper() + s.Substring(1, s.Length - 1);
                 comboDisplayMode.Items.Add(s);
             }
+            comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("Panadapter") + 1, "3D Pan");
         }
 
         private void InitAGCModes()
@@ -28538,15 +28540,10 @@ namespace Thetis
         }
         public void comboDisplayMode_SelectedIndexChanged(object sender, System.EventArgs e)
         {
-            // The 3D view uses the full RX1 panadapter area, never the waterfall split.
-            if (_panafall3d_enabled && comboDisplayMode.Text != "Panadapter")
-            {
-                comboDisplayMode.Text = "Panadapter";
-                return;
-            }
-
             _pause_DisplayThread = true;
             DisplayMode old_mode = Display.CurrentDisplayMode;
+            _panafall3d_enabled = comboDisplayMode.Text == "3D Pan";
+            Display.Panafall3DEnabled = _panafall3d_enabled;
 
             switch (comboDisplayMode.Text)
             {
@@ -28558,6 +28555,7 @@ namespace Thetis
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 1, 0, 0, 0);
                     break;
                 case "Panadapter":
+                case "3D Pan":
                     Display.CurrentDisplayMode = DisplayMode.PANADAPTER;
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 0, 0, 0, 0);
                     CalcDisplayFreq();
@@ -28748,6 +28746,7 @@ namespace Thetis
             }
 
             was_panadapter = false;
+            was_3d_panadapter = false;
             was_waterfall = false;
             UpdateRX1DisplayOffsets();
             UpdateRX2DisplayOffsets();
@@ -30246,21 +30245,6 @@ namespace Thetis
                 radio.GetDSPRX(1, 0).RXOutputGain = _hl2_digital_tx_rx2_gain;
                 _hl2_digital_tx_rx_audio_muted = false;
             }
-        }
-
-        private void chkPanafall3D_CheckedChanged(object sender, EventArgs e)
-        {
-            _pause_DisplayThread = true;
-            _panafall3d_enabled = chkPanafall3D.Checked;
-            if (_panafall3d_enabled && comboDisplayMode.Text != "Panadapter")
-                comboDisplayMode.Text = "Panadapter";
-            chkPanafall3D.BackColor = _panafall3d_enabled ? button_selected_color : SystemColors.Control;
-            Display.Panafall3DEnabled = _panafall3d_enabled;
-            int previousFPS = DisplayFPS;
-            ApplyActiveDisplayFPS();
-            if (previousFPS != DisplayFPS)
-                Display.ResetDX2DModeDescription();
-            _pause_DisplayThread = false;
         }
 
         private bool _forceATTwhenPSAoff = true; //MW0LGE [2.9.0.7] added
@@ -35134,6 +35118,7 @@ namespace Thetis
                 case DSPMode.SPEC:
                     radModeSPEC.BackColor = SystemColors.Control;
                     comboDisplayMode.Items.Insert(1, "Panadapter");
+                    comboDisplayMode.Items.Insert(2, "3D Pan");
                     comboDisplayMode.Items.Insert(5, "Waterfall");
                     ptbFilterShift.Enabled = true;
                     btnFilterShiftReset.Enabled = true;
@@ -35141,7 +35126,8 @@ namespace Thetis
                         EnableAllFilters();
                     RX1Filter = rx1_filter;
                     //if_shift = true;
-                    if (was_panadapter) comboDisplayMode.Text = "Panadapter";
+                    if (was_3d_panadapter) comboDisplayMode.Text = "3D Pan";
+                    else if (was_panadapter) comboDisplayMode.Text = "Panadapter";
                     else if (was_waterfall) comboDisplayMode.Text = "Waterfall";
                     switch (Display.CurrentDisplayMode)
                     {
@@ -35416,15 +35402,18 @@ namespace Thetis
                     DisableAllFilters();
                     ptbFilterShift.Enabled = false;
                     btnFilterShiftReset.Enabled = false;
-                    bool save_pan = (Display.CurrentDisplayMode == DisplayMode.PANADAPTER);
+                    bool save_3d_pan = comboDisplayMode.Text == "3D Pan";
+                    bool save_pan = Display.CurrentDisplayMode == DisplayMode.PANADAPTER && !save_3d_pan;
                     bool save_water = (Display.CurrentDisplayMode == DisplayMode.WATERFALL);
-                    if (save_pan || save_water)
+                    if (save_pan || save_3d_pan || save_water)
                     {
                         comboDisplayMode.Text = "Spectrum";
                     }
                     comboDisplayMode.Items.Remove("Panadapter");
+                    comboDisplayMode.Items.Remove("3D Pan");
                     comboDisplayMode.Items.Remove("Waterfall");
                     was_panadapter = save_pan;
+                    was_3d_panadapter = save_3d_pan;
                     was_waterfall = save_water;
                     radio.GetDSPRX(0, 0).SpectrumPreFilter = true;
                     Display.RXDisplayLow = -(int)sample_rate_rx1 / 2;

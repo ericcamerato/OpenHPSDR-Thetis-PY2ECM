@@ -288,7 +288,6 @@
         private RadioButtonTS radDisplayZoom1x;
         private CheckBoxTS chkFWCATUBypass;
         private CheckBoxTS chkFWCATU;
-        private CheckBoxTS chkPanafall3D;
         private CheckBoxTS chkMicMute;
         private CheckBoxTS chkMUT;
         private PanelTS panelPower;
@@ -573,7 +572,6 @@
             this.comboAMTXProfile = new System.Windows.Forms.ComboBoxTS();
             this.chkX2TR = new System.Windows.Forms.CheckBoxTS();
             this.chkFWCATU = new System.Windows.Forms.CheckBoxTS();
-            this.chkPanafall3D = new System.Windows.Forms.CheckBoxTS();
             this.comboRX2Band = new System.Windows.Forms.ComboBoxTS();
             this.chkPower = new System.Windows.Forms.CheckBoxTS();
             this.udRX2FilterHigh = new System.Windows.Forms.NumericUpDownTS();
@@ -2142,20 +2140,6 @@
             this.toolTip1.SetToolTip(this.chkFWCATU, resources.GetString("chkFWCATU.ToolTip"));
             this.chkFWCATU.CheckedChanged += new System.EventHandler(this.chkFWCATU_CheckedChanged);
             this.chkFWCATU.MouseUp += new System.Windows.Forms.MouseEventHandler(this.chkFWCATU_MouseUp);
-            //
-            // chkPanafall3D
-            //
-            this.chkPanafall3D.Appearance = System.Windows.Forms.Appearance.Button;
-            this.chkPanafall3D.FlatAppearance.BorderSize = 0;
-            this.chkPanafall3D.ForeColor = System.Drawing.SystemColors.ControlLightLight;
-            this.chkPanafall3D.Location = new System.Drawing.Point(52, 51);
-            this.chkPanafall3D.Name = "chkPanafall3D";
-            this.chkPanafall3D.Size = new System.Drawing.Size(50, 23);
-            this.chkPanafall3D.TabIndex = 69;
-            this.chkPanafall3D.Text = "3D";
-            this.chkPanafall3D.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.toolTip1.SetToolTip(this.chkPanafall3D, "Toggle RX1 3D spectrum in Panadapter or Panafall mode");
-            this.chkPanafall3D.CheckedChanged += new System.EventHandler(this.chkPanafall3D_CheckedChanged);
             // 
             // comboRX2Band
             // 
@@ -6701,7 +6685,6 @@
             this.panelDisplay2.BackColor = System.Drawing.Color.Transparent;
             this.panelDisplay2.Controls.Add(this.chkDisplayPeak);
             this.panelDisplay2.Controls.Add(this.comboDisplayMode);
-            this.panelDisplay2.Controls.Add(this.chkPanafall3D);
             this.panelDisplay2.Controls.Add(this.chkDisplayAVG);
             this.panelDisplay2.Controls.Add(this.chkFWCATU);
             this.panelDisplay2.ForeColor = System.Drawing.SystemColors.ControlLightLight;
