@@ -5420,7 +5420,9 @@ namespace Thetis
                     }
 
                     //pana fill
-                    if (pan_fill && !(panafall3DEnabled && rx == 1 && !bottom && !local_mox))
+                    if (pan_fill && !(panafall3DEnabled && rx == 1 && !bottom && !local_mox &&
+                        (current_display_mode == DisplayMode.PANADAPTER ||
+                         current_display_mode == DisplayMode.PANAFALL)))
                     {
                         // draw vertical line, this is so much faster than FillGeometry as the geo created would be so complex any fill alogorthm would struggle
                         bottomPoint.X = point.X;
