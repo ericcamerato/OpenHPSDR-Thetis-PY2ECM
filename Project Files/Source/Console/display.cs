@@ -3979,6 +3979,8 @@ namespace Thetis
 
                     _d2dRenderTarget.FillRectangle(rectDest, m_bDX2_display_background_brush);
 
+                    bool tx3DOnRX2 = panafall3DEnabled && localMox(2);
+
                     // LINEAR BRUSH BUILDING
                     if (_bRebuildRXLinearGradBrush || _bRebuildTXLinearGradBrush)
                     {
@@ -4011,13 +4013,16 @@ namespace Thetis
                                     break;
                             }
 
-                            switch (current_display_mode_bottom)
+                            if (!tx3DOnRX2)
                             {
-                                case DisplayMode.PANAFALL:
-                                case DisplayMode.PANASCOPE:
-                                case DisplayMode.SPECTRASCOPE:
-                                    tmpHeightRX2 /= 2;
-                                    break;
+                                switch (current_display_mode_bottom)
+                                {
+                                    case DisplayMode.PANAFALL:
+                                    case DisplayMode.PANASCOPE:
+                                    case DisplayMode.SPECTRASCOPE:
+                                        tmpHeightRX2 /= 2;
+                                        break;
+                                }
                             }
 
                         }
@@ -4037,7 +4042,7 @@ namespace Thetis
                                         nVertShift = tmpHeightRX2;
                                         break;
                                     case DisplayMode.PANAFALL:
-                                        nVertShift = tmpHeightRX2 * 2;
+                                        nVertShift = tx3DOnRX2 ? tmpHeightRX2 : tmpHeightRX2 * 2;
                                         break;
                                 }
                             }
@@ -4062,7 +4067,7 @@ namespace Thetis
                                         nVertShift = tmpHeightRX2;
                                         break;
                                     case DisplayMode.PANAFALL:
-                                        nVertShift = tmpHeightRX2 * 2;
+                                        nVertShift = tx3DOnRX2 ? tmpHeightRX2 : tmpHeightRX2 * 2;
                                         break;
                                 }
                             }
@@ -4182,23 +4187,32 @@ namespace Thetis
 
                         m_nRX2DisplayHeight = displayTargetHeight / 2;
 
-                        switch (current_display_mode_bottom)
+                        if (tx3DOnRX2)
                         {
-
-                            case DisplayMode.PANADAPTER:
-                                DrawPanadapterDX2D(m_nRX2DisplayHeight, displayTargetWidth, m_nRX2DisplayHeight, 2, true);
-                                if (_showTCISpots) drawSpots(2, m_nRX2DisplayHeight, displayTargetWidth, false);
-                                break;
-                            case DisplayMode.WATERFALL:
-                                DrawWaterfallDX2D(m_nRX2DisplayHeight, displayTargetWidth, m_nRX2DisplayHeight, 2, true);
-                                if (_showTCISpots) drawSpots(2, m_nRX2DisplayHeight, displayTargetWidth, false);
-                                break;
-                            case DisplayMode.PANAFALL:
-                                m_nRX2DisplayHeight = displayTargetHeight / 4;
-                                DrawPanadapterDX2D(m_nRX2DisplayHeight * 2, displayTargetWidth, m_nRX2DisplayHeight, 2, false);
-                                DrawWaterfallDX2D(m_nRX2DisplayHeight * 3, displayTargetWidth, m_nRX2DisplayHeight, 2, true);
-                                if (_showTCISpots) drawSpots(2, m_nRX2DisplayHeight * 2, displayTargetWidth, false);
-                                break;
+                            DrawPanadapterDX2D(m_nRX2DisplayHeight, displayTargetWidth,
+                                m_nRX2DisplayHeight, 2, true);
+                            if (_showTCISpots) drawSpots(2, m_nRX2DisplayHeight,
+                                displayTargetWidth, false);
+                        }
+                        else
+                        {
+                            switch (current_display_mode_bottom)
+                            {
+                                case DisplayMode.PANADAPTER:
+                                    DrawPanadapterDX2D(m_nRX2DisplayHeight, displayTargetWidth, m_nRX2DisplayHeight, 2, true);
+                                    if (_showTCISpots) drawSpots(2, m_nRX2DisplayHeight, displayTargetWidth, false);
+                                    break;
+                                case DisplayMode.WATERFALL:
+                                    DrawWaterfallDX2D(m_nRX2DisplayHeight, displayTargetWidth, m_nRX2DisplayHeight, 2, true);
+                                    if (_showTCISpots) drawSpots(2, m_nRX2DisplayHeight, displayTargetWidth, false);
+                                    break;
+                                case DisplayMode.PANAFALL:
+                                    m_nRX2DisplayHeight = displayTargetHeight / 4;
+                                    DrawPanadapterDX2D(m_nRX2DisplayHeight * 2, displayTargetWidth, m_nRX2DisplayHeight, 2, false);
+                                    DrawWaterfallDX2D(m_nRX2DisplayHeight * 3, displayTargetWidth, m_nRX2DisplayHeight, 2, true);
+                                    if (_showTCISpots) drawSpots(2, m_nRX2DisplayHeight * 2, displayTargetWidth, false);
+                                    break;
+                            }
                         }
                     }
 
@@ -5219,6 +5233,7 @@ namespace Thetis
 
                 if (data_ready_bottom)
                 {
+                    fresh3DFrame = true;
                     bDoVisualNotch = true;
 
                     if (blank_bottom_display || (local_mox && (rx2_dsp_mode == DSPMode.CWL || rx2_dsp_mode == DSPMode.CWU)))
@@ -5378,9 +5393,12 @@ namespace Thetis
                     modifyDataForNotches(ref data, rx, bottom, local_mox, displayduplex, W);
                 }
 
-                bool draw3D = panafall3DEnabled && rx == 1 && !bottom &&
-                    (current_display_mode == DisplayMode.PANADAPTER ||
-                     current_display_mode == DisplayMode.PANAFALL);
+                bool txOnRX2 = _mox && _tx_on_vfob && _rx2_enabled;
+                bool draw3D = panafall3DEnabled &&
+                    ((rx == 1 && !bottom && !txOnRX2 &&
+                      (current_display_mode == DisplayMode.PANADAPTER ||
+                       current_display_mode == DisplayMode.PANAFALL)) ||
+                     (rx == 2 && txOnRX2 && local_mox));
                 if (draw3D)
                 {
                     DrawPanafall3DHistory(nVerticalShift, W, H, nDecimatedWidth,
