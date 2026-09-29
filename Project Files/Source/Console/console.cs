@@ -28538,6 +28538,13 @@ namespace Thetis
         }
         public void comboDisplayMode_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            // The 3D view uses the full RX1 panadapter area, never the waterfall split.
+            if (_panafall3d_enabled && comboDisplayMode.Text != "Panadapter")
+            {
+                comboDisplayMode.Text = "Panadapter";
+                return;
+            }
+
             _pause_DisplayThread = true;
             DisplayMode old_mode = Display.CurrentDisplayMode;
 
@@ -30245,6 +30252,8 @@ namespace Thetis
         {
             _pause_DisplayThread = true;
             _panafall3d_enabled = chkPanafall3D.Checked;
+            if (_panafall3d_enabled && comboDisplayMode.Text != "Panadapter")
+                comboDisplayMode.Text = "Panadapter";
             chkPanafall3D.BackColor = _panafall3d_enabled ? button_selected_color : SystemColors.Control;
             Display.Panafall3DEnabled = _panafall3d_enabled;
             int previousFPS = DisplayFPS;
