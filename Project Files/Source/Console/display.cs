@@ -1639,8 +1639,8 @@ namespace Thetis
         }
 
         private static DisplayMode current_display_mode = DisplayMode.PANAFALL;
-        private const int Panafall3DRows = 16;
-        private const int Panafall3DSamples = 160;
+        private const int Panafall3DRows = 18;
+        private const int Panafall3DSamples = 128;
         private static readonly float[,] panafall3DHistory = new float[Panafall3DRows, Panafall3DSamples];
         private static int panafall3DHead = -1;
         private static int panafall3DCount;
@@ -5003,9 +5003,11 @@ namespace Thetis
 
         private static void DrawPanafall3DHistory(int verticalShift, int width, int height,
             int sampleCount, float[] data, float offset, int gridMax, int gridMin,
-            long leftEdge, long rightEdge, bool freshFrame)
+            long leftEdge, long rightEdge, bool freshFrame,
+            SharpDX.Direct2D1.Brush lineBrush, SharpDX.Direct2D1.Brush fillBrush)
         {
-            if (width < 2 || height < 2 || sampleCount < 2 || m_bDX2_3DHistoryBrush == null)
+            if (width < 2 || height < 2 || sampleCount < 2 ||
+                lineBrush == null || fillBrush == null || m_bDX2_grid_pen == null)
                 return;
 
             if (panafall3DWidth != width || panafall3DHeight != height ||
@@ -5032,30 +5034,61 @@ namespace Thetis
                     panafall3DCount++;
             }
 
-            float pixelsPerDb = height / (float)Math.Max(1, gridMax - gridMin);
             float centreX = width / 2f;
-            for (int age = panafall3DCount - 1; age >= 1; age--)
+            float gridOpacity = m_bDX2_grid_pen.Opacity;
+            m_bDX2_grid_pen.Opacity = 0.35f;
+            for (int lane = 0; lane <= 8; lane++)
+            {
+                float frontX = lane * (width - 1f) / 8f;
+                float rearX = centreX + (frontX - centreX) * 0.72f;
+                _d2dRenderTarget.DrawLine(
+                    new SharpDX.Vector2(rearX, verticalShift + height * 0.42f),
+                    new SharpDX.Vector2(frontX, verticalShift + height * 0.92f),
+                    m_bDX2_grid_pen, 1f);
+            }
+            for (int plane = 0; plane <= 6; plane++)
+            {
+                float depth = plane / 6f;
+                float halfWidth = width * (1f - 0.28f * depth) / 2f;
+                float floorY = verticalShift + height * (0.92f - 0.50f * depth);
+                _d2dRenderTarget.DrawLine(
+                    new SharpDX.Vector2(centreX - halfWidth, floorY),
+                    new SharpDX.Vector2(centreX + halfWidth, floorY),
+                    m_bDX2_grid_pen, 1f);
+            }
+            m_bDX2_grid_pen.Opacity = gridOpacity;
+
+            float lineOpacity = lineBrush.Opacity;
+            float fillOpacity = fillBrush.Opacity;
+            float dbRange = Math.Max(1, gridMax - gridMin);
+            for (int age = panafall3DCount - 1; age >= 0; age--)
             {
                 int row = (panafall3DHead - age + Panafall3DRows) % Panafall3DRows;
-                float depth = age / (float)Panafall3DRows;
-                float horizontalScale = 1f - 0.35f * depth;
-                float verticalScale = 1f - 0.60f * depth;
-                float backOffset = height * 0.05f * depth;
-                m_bDX2_3DHistoryBrush.Opacity = 0.15f + (1f - depth) * 0.5f;
+                float depth = age / (float)Math.Max(1, Panafall3DRows - 1);
+                float horizontalScale = 1f - 0.28f * depth;
+                float floorY = verticalShift + height * (0.92f - 0.50f * depth);
+                float ridgeHeight = height * (0.37f - 0.12f * depth);
+                lineBrush.Opacity = lineOpacity * (0.35f + 0.65f * (1f - depth));
+                fillBrush.Opacity = fillOpacity * (0.22f + 0.38f * (1f - depth));
 
                 SharpDX.Vector2 previous = new SharpDX.Vector2();
                 for (int sample = 0; sample < Panafall3DSamples; sample++)
                 {
                     float x = centreX + (sample * (width - 1f) / (Panafall3DSamples - 1) - centreX) * horizontalScale;
-                    float spectrumY = Math.Max(0f, Math.Min(height,
-                        (gridMax - panafall3DHistory[row, sample]) * pixelsPerDb));
-                    float y = verticalShift + backOffset + spectrumY * verticalScale;
+                    float level = Math.Max(0f, Math.Min(1f,
+                        (panafall3DHistory[row, sample] - gridMin) / dbRange));
+                    float y = floorY - level * ridgeHeight;
                     SharpDX.Vector2 point = new SharpDX.Vector2(x, y);
+                    if ((sample & 1) == 0)
+                        _d2dRenderTarget.DrawLine(point,
+                            new SharpDX.Vector2(x, floorY), fillBrush, 1.5f);
                     if (sample > 0)
-                        _d2dRenderTarget.DrawLine(previous, point, m_bDX2_3DHistoryBrush, 1f);
+                        _d2dRenderTarget.DrawLine(previous, point, lineBrush, 1.2f);
                     previous = point;
                 }
             }
+            lineBrush.Opacity = lineOpacity;
+            fillBrush.Opacity = fillOpacity;
         }
 
         unsafe static private bool DrawPanadapterDX2D(int nVerticalShift, int W, int H, int rx, bool bottom)
@@ -5324,16 +5357,17 @@ namespace Thetis
                     modifyDataForNotches(ref data, rx, bottom, local_mox, displayduplex, W);
                 }
 
-                if (panafall3DEnabled && rx == 1 && !bottom &&
+                bool draw3D = panafall3DEnabled && rx == 1 && !bottom && !local_mox &&
                     (current_display_mode == DisplayMode.PANADAPTER ||
-                     current_display_mode == DisplayMode.PANAFALL))
+                     current_display_mode == DisplayMode.PANAFALL);
+                if (draw3D)
                 {
-                    if (local_mox)
-                        ResetPanafall3DHistory();
-                    else
-                        DrawPanafall3DHistory(nVerticalShift, W, H, nDecimatedWidth,
-                            data, fOffset, grid_max, grid_min, left_edge, right_edge, fresh3DFrame);
+                    DrawPanafall3DHistory(nVerticalShift, W, H, nDecimatedWidth,
+                        data, fOffset, grid_max, grid_min, left_edge, right_edge,
+                        fresh3DFrame, lineBrush, fillBrush);
                 }
+                else if (panafall3DEnabled && local_mox && rx == 1)
+                    ResetPanafall3DHistory();
 
                 float averageSum = 0;
                 int averageCount = 1;
@@ -5420,9 +5454,7 @@ namespace Thetis
                     }
 
                     //pana fill
-                    if (pan_fill && !(panafall3DEnabled && rx == 1 && !bottom && !local_mox &&
-                        (current_display_mode == DisplayMode.PANADAPTER ||
-                         current_display_mode == DisplayMode.PANAFALL)))
+                    if (pan_fill && !draw3D)
                     {
                         // draw vertical line, this is so much faster than FillGeometry as the geo created would be so complex any fill alogorthm would struggle
                         bottomPoint.X = point.X;
@@ -5473,13 +5505,14 @@ namespace Thetis
                         bIgnoringPoints = true;
                         continue;
                     }
-                    if (bIgnoringPoints)
+                    if (bIgnoringPoints && !draw3D)
                     {
                         _d2dRenderTarget.DrawLine(previousPoint, lastIgnoredPoint, lineBrush, line_width);
                         previousPoint = lastIgnoredPoint;
                         bIgnoringPoints = false;
                     }
-                    _d2dRenderTarget.DrawLine(previousPoint, point, lineBrush, line_width);
+                    if (!draw3D)
+                        _d2dRenderTarget.DrawLine(previousPoint, point, lineBrush, line_width);
                     previousPoint = point;
                 }
 
@@ -7917,7 +7950,6 @@ namespace Thetis
         private static SharpDX.Direct2D1.Brush m_bDX2_data_fill_fpen_brush;
         private static SharpDX.Direct2D1.Brush m_bDX2_data_fill_fpen_brush_tx;
         private static SharpDX.Direct2D1.Brush m_bDX2_data_line_pen_brush;
-        private static SharpDX.Direct2D1.Brush m_bDX2_3DHistoryBrush;
         private static SharpDX.Direct2D1.Brush m_bDX2_data_line_pen_brush_tx;
         private static SharpDX.Direct2D1.Brush m_bDX2_tx_data_line_fpen_brush;
         private static SharpDX.Direct2D1.Brush m_bDX2_tx_data_line_pen_brush;
@@ -8230,7 +8262,6 @@ namespace Thetis
             if (m_bDX2_data_fill_fpen_brush != null) Utilities.Dispose(ref m_bDX2_data_fill_fpen_brush);
             if (m_bDX2_data_fill_fpen_brush_tx != null) Utilities.Dispose(ref m_bDX2_data_fill_fpen_brush_tx);
             if (m_bDX2_data_line_pen_brush != null) Utilities.Dispose(ref m_bDX2_data_line_pen_brush);
-            if (m_bDX2_3DHistoryBrush != null) Utilities.Dispose(ref m_bDX2_3DHistoryBrush);
             if (m_bDX2_data_line_pen_brush_tx != null) Utilities.Dispose(ref m_bDX2_data_line_pen_brush_tx);
             if (m_bDX2_tx_data_line_fpen_brush != null) Utilities.Dispose(ref m_bDX2_tx_data_line_fpen_brush);
             if (m_bDX2_tx_data_line_pen_brush != null) Utilities.Dispose(ref m_bDX2_tx_data_line_pen_brush);
@@ -8384,7 +8415,6 @@ namespace Thetis
                 m_bDX2_data_fill_fpen_brush = convertBrush((SolidBrush)data_fill_fpen.Brush);
                 m_bDX2_data_fill_fpen_brush_tx = convertBrush((SolidBrush)data_fill_fpen_tx.Brush);
                 m_bDX2_data_line_pen_brush = convertBrush((SolidBrush)data_line_pen.Brush);
-                m_bDX2_3DHistoryBrush = getDXBrushForColour(Color.DeepSkyBlue);
                 m_bDX2_data_line_pen_brush_tx = convertBrush((SolidBrush)tx_data_line_pen.Brush);
                 m_bDX2_tx_data_line_fpen_brush = convertBrush((SolidBrush)tx_data_line_fpen.Brush);
                 m_bDX2_tx_data_line_pen_brush = convertBrush((SolidBrush)tx_data_line_pen.Brush);
