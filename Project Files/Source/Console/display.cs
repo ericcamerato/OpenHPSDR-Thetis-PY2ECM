@@ -1640,8 +1640,9 @@ namespace Thetis
 
         private static DisplayMode current_display_mode = DisplayMode.PANAFALL;
         private const int Panafall3DRows = 18;
-        private const int Panafall3DSamples = 128;
+        private const int Panafall3DSamples = 512;
         private static readonly float[,] panafall3DHistory = new float[Panafall3DRows, Panafall3DSamples];
+        private static readonly float[] panafall3DBaseline = new float[Panafall3DRows];
         private static int panafall3DHead = -1;
         private static int panafall3DCount;
         private static int panafall3DWidth;
@@ -5027,11 +5028,20 @@ namespace Thetis
             if (freshFrame)
             {
                 panafall3DHead = (panafall3DHead + 1) % Panafall3DRows;
+                float sum = 0f;
                 for (int sample = 0; sample < Panafall3DSamples; sample++)
                 {
-                    int source = sample * (sampleCount - 1) / (Panafall3DSamples - 1);
-                    panafall3DHistory[panafall3DHead, sample] = data[source] + offset;
+                    int first = sample * sampleCount / Panafall3DSamples;
+                    int last = Math.Max(first + 1,
+                        (sample + 1) * sampleCount / Panafall3DSamples);
+                    float strongest = float.MinValue;
+                    for (int source = first; source < last; source++)
+                        strongest = Math.Max(strongest, data[source]);
+                    float dbm = strongest + offset;
+                    panafall3DHistory[panafall3DHead, sample] = dbm;
+                    sum += dbm;
                 }
+                panafall3DBaseline[panafall3DHead] = sum / Panafall3DSamples;
                 if (panafall3DCount < Panafall3DRows)
                     panafall3DCount++;
             }
@@ -5081,8 +5091,11 @@ namespace Thetis
                     float x = centreX + (sample * (width - 1f) / (Panafall3DSamples - 1) - centreX) * horizontalScale;
                     float level = Math.Max(0f, Math.Min(1f,
                         (gridMax - panafall3DHistory[row, sample]) / dbRange));
+                    float prominence = Math.Max(0f, Math.Min(1f,
+                        (panafall3DHistory[row, sample] - panafall3DBaseline[row] - 7f) / 22f));
                     float y = Math.Max(verticalShift + height * 0.10f,
-                        floorY - (1f - level) * height * heightScale);
+                        floorY - (1f - level) * height * heightScale -
+                        prominence * height * 0.22f * depth);
                     SharpDX.Vector2 point = new SharpDX.Vector2(x, y);
                     SharpDX.Direct2D1.Brush columnBrush = !useGradient && age <= 2 && level < 0.32f ?
                         m_bDX2_3DPeakBrush : terrainBrush;
