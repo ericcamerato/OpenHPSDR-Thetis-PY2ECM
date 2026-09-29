@@ -20375,31 +20375,63 @@ namespace Thetis
         }
 
         private int _display_fps = 60;
+        private int _display_fps_2d = 60;
+        private int _display_fps_3d = 30;
+        private bool _panafall3d_enabled;
         private double _display_delay = 1000 / 60f;
         public int DisplayFPS
         {
             get { return _display_fps; }
+            set { DisplayFPS2D = value; }
+        }
+
+        public int DisplayFPS2D
+        {
+            get { return _display_fps_2d; }
             set
             {
-                int old_fps = _display_fps;
+                _display_fps_2d = Math.Max(1, Math.Min(MAX_FPS, value));
+                ApplyActiveDisplayFPS();
+            }
+        }
 
-                _display_fps = value;
-                if (_display_fps > MAX_FPS) _display_fps = MAX_FPS;
-                if (_display_fps < 1) _display_fps = 1;
-                _display_delay = 1000 / (float)_display_fps;
+        public int DisplayFPS3D
+        {
+            get { return _display_fps_3d; }
+            set
+            {
+                _display_fps_3d = Math.Max(1, Math.Min(MAX_FPS, value));
+                ApplyActiveDisplayFPS();
+            }
+        }
 
-                Display.CurrentFPS = _display_fps; //MW0LGE_21k8 pre init
+        private bool Panafall3DActive
+        {
+            get
+            {
+                return _panafall3d_enabled &&
+                    (Display.CurrentDisplayMode == DisplayMode.PANADAPTER ||
+                     Display.CurrentDisplayMode == DisplayMode.PANAFALL);
+            }
+        }
 
-                int wdspFps = (int)Math.Max(1, _display_fps * 1.1f); //[2.10.3]MW0LGE add in 10% extra so frames are more often avaialble for use in RunDisplay()
+        private void ApplyActiveDisplayFPS()
+        {
+            int old_fps = _display_fps;
+            _display_fps = Panafall3DActive ? _display_fps_3d : _display_fps_2d;
+            _display_delay = 1000 / (float)_display_fps;
+            Display.CurrentFPS = _display_fps;
+
+            int wdspFps = (int)Math.Max(1, _display_fps * 1.1f);
+            if (specRX != null)
+            {
                 specRX.GetSpecRX(0).FrameRate = wdspFps;
                 specRX.GetSpecRX(1).FrameRate = wdspFps;
                 specRX.GetSpecRX(cmaster.inid(1, 0)).FrameRate = wdspFps;
-
-                if (old_fps != _display_fps)
-                {
-                    FSPChangedHandlers?.Invoke(old_fps, _display_fps);
-                }
             }
+
+            if (old_fps != _display_fps)
+                FSPChangedHandlers?.Invoke(old_fps, _display_fps);
         }
 
         private int multimeter_peak_hold_time = 500;
@@ -28715,10 +28747,15 @@ namespace Thetis
 
             if (comboDisplayMode.Focused)
                 btnHidden.Focus();
+            int previousFPS = DisplayFPS;
+            ApplyActiveDisplayFPS();
+            if (previousFPS != DisplayFPS)
+                Display.ResetDX2DModeDescription();
             _pause_DisplayThread = false;
 
             if(old_mode != Display.CurrentDisplayMode)
             {
+                Display.ResetPanafall3DHistory();
                 DisplayModeChangedHandlers?.Invoke(1, old_mode, Display.CurrentDisplayMode);
             }
         }
@@ -30202,6 +30239,19 @@ namespace Thetis
                 radio.GetDSPRX(1, 0).RXOutputGain = _hl2_digital_tx_rx2_gain;
                 _hl2_digital_tx_rx_audio_muted = false;
             }
+        }
+
+        private void chkPanafall3D_CheckedChanged(object sender, EventArgs e)
+        {
+            _pause_DisplayThread = true;
+            _panafall3d_enabled = chkPanafall3D.Checked;
+            chkPanafall3D.BackColor = _panafall3d_enabled ? button_selected_color : SystemColors.Control;
+            Display.Panafall3DEnabled = _panafall3d_enabled;
+            int previousFPS = DisplayFPS;
+            ApplyActiveDisplayFPS();
+            if (previousFPS != DisplayFPS)
+                Display.ResetDX2DModeDescription();
+            _pause_DisplayThread = false;
         }
 
         private bool _forceATTwhenPSAoff = true; //MW0LGE [2.9.0.7] added

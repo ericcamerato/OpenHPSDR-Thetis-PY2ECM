@@ -340,6 +340,7 @@ namespace Thetis
             //-
 
             udDisplayFPS.Maximum = Console.MAX_FPS;
+            udDisplayFPS3D.Maximum = Console.MAX_FPS;
 
             Skin.SetConsole(console);
 
@@ -1109,7 +1110,8 @@ namespace Thetis
             if (needsRecovering(recoveryList, "udRX2DisplayGridMax")) udRX2DisplayGridMax.Value = Display.RX2SpectrumGridMax;
             if (needsRecovering(recoveryList, "udRX2DisplayGridMin")) udRX2DisplayGridMin.Value = Display.RX2SpectrumGridMin;
             if (needsRecovering(recoveryList, "udRX2DisplayGridStep")) udRX2DisplayGridStep.Value = Display.RX2SpectrumGridStep;
-            if (needsRecovering(recoveryList, "udDisplayFPS")) udDisplayFPS.Value = console.DisplayFPS;
+            if (needsRecovering(recoveryList, "udDisplayFPS")) udDisplayFPS.Value = console.DisplayFPS2D;
+            if (needsRecovering(recoveryList, "udDisplayFPS3D")) udDisplayFPS3D.Value = console.DisplayFPS3D;
             if (needsRecovering(recoveryList, "clrbtnWaterfallLow")) clrbtnWaterfallLow.Color = Display.WaterfallLowColor;
             if (needsRecovering(recoveryList, "clrbtnWaterfallLow_tx")) clrbtnWaterfallLow_tx.Color = Display.WaterfallLowColorTX;
             if (needsRecovering(recoveryList, "clrbtnRX2WaterfallLow")) clrbtnRX2WaterfallLow.Color = Display.RX2WaterfallLowColor;
@@ -2530,6 +2532,7 @@ namespace Thetis
             udDisplayGridMin_ValueChanged(this, e);
             udDisplayGridStep_ValueChanged(this, e);
             udDisplayFPS_ValueChanged(this, e);
+            udDisplayFPS3D_ValueChanged(this, e);
             udTXGridMax_ValueChanged(this, e);
             udTXGridMin_ValueChanged(this, e);
             udTXGridStep_ValueChanged(this, e);
@@ -8185,13 +8188,21 @@ namespace Thetis
         private void udDisplayFPS_ValueChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
-            console.DisplayFPS = (int)udDisplayFPS.Value;
+            console.DisplayFPS2D = (int)udDisplayFPS.Value;
 
             Display.ResetDX2DModeDescription();
 
             udDisplayAVGTime_ValueChanged(this, EventArgs.Empty);
             udRX2DisplayAVGTime_ValueChanged(this, EventArgs.Empty);
 
+            setWaterFallCalculatedDelayText();
+        }
+
+        private void udDisplayFPS3D_ValueChanged(object sender, System.EventArgs e)
+        {
+            if (initializing) return;
+            console.DisplayFPS3D = (int)udDisplayFPS3D.Value;
+            Display.ResetDX2DModeDescription();
             setWaterFallCalculatedDelayText();
         }
 

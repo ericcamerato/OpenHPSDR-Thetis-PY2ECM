@@ -2090,6 +2090,8 @@
             this.lblDisplayPeakText = new System.Windows.Forms.LabelTS();
             this.udDisplayFPS = new System.Windows.Forms.NumericUpDownTS();
             this.lblDisplayFPS = new System.Windows.Forms.LabelTS();
+            this.udDisplayFPS3D = new System.Windows.Forms.NumericUpDownTS();
+            this.lblDisplayFPS3D = new System.Windows.Forms.LabelTS();
             this.tpDisplayTop = new System.Windows.Forms.TabPage();
             this.grpDisplayWaterfall = new System.Windows.Forms.GroupBoxTS();
             this.btnRX1CopyLowHighWaterfall = new System.Windows.Forms.ButtonTS();
@@ -4959,6 +4961,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.udDisplayCPUMeter)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.udDisplayPeakText)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.udDisplayFPS)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.udDisplayFPS3D)).BeginInit();
             this.tpDisplayTop.SuspendLayout();
             this.grpDisplayWaterfall.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.udWaterfallAGCOffsetRX1)).BeginInit();
@@ -34533,6 +34536,8 @@
             this.grpDisplayRefreshRates.Controls.Add(this.lblDisplayPeakText);
             this.grpDisplayRefreshRates.Controls.Add(this.udDisplayFPS);
             this.grpDisplayRefreshRates.Controls.Add(this.lblDisplayFPS);
+            this.grpDisplayRefreshRates.Controls.Add(this.udDisplayFPS3D);
+            this.grpDisplayRefreshRates.Controls.Add(this.lblDisplayFPS3D);
             this.grpDisplayRefreshRates.Location = new System.Drawing.Point(8, 8);
             this.grpDisplayRefreshRates.Name = "grpDisplayRefreshRates";
             this.grpDisplayRefreshRates.Size = new System.Drawing.Size(275, 136);
@@ -34543,7 +34548,7 @@
             // btnGetMonitorHz
             // 
             this.btnGetMonitorHz.Image = null;
-            this.btnGetMonitorHz.Location = new System.Drawing.Point(190, 14);
+            this.btnGetMonitorHz.Location = new System.Drawing.Point(190, 110);
             this.btnGetMonitorHz.Name = "btnGetMonitorHz";
             this.btnGetMonitorHz.Selectable = true;
             this.btnGetMonitorHz.Size = new System.Drawing.Size(57, 23);
@@ -34694,7 +34699,7 @@
             0,
             0,
             0});
-            this.udDisplayFPS.Location = new System.Drawing.Point(136, 17);
+            this.udDisplayFPS.Location = new System.Drawing.Point(75, 17);
             this.udDisplayFPS.Maximum = new decimal(new int[] {
             144,
             0,
@@ -34709,7 +34714,7 @@
             this.udDisplayFPS.Size = new System.Drawing.Size(48, 20);
             this.udDisplayFPS.TabIndex = 32;
             this.udDisplayFPS.TinyStep = false;
-            this.toolTip1.SetToolTip(this.udDisplayFPS, "Frames Per Second (approximate)");
+            this.toolTip1.SetToolTip(this.udDisplayFPS, "2D display frames per second (approximate)");
             this.udDisplayFPS.Value = new decimal(new int[] {
             60,
             0,
@@ -34726,7 +34731,30 @@
             this.lblDisplayFPS.Name = "lblDisplayFPS";
             this.lblDisplayFPS.Size = new System.Drawing.Size(93, 13);
             this.lblDisplayFPS.TabIndex = 31;
-            this.lblDisplayFPS.Text = "Main Display FPS:";
+            this.lblDisplayFPS.Text = "2D FPS:";
+            //
+            // udDisplayFPS3D
+            //
+            this.udDisplayFPS3D.Location = new System.Drawing.Point(194, 17);
+            this.udDisplayFPS3D.Maximum = new decimal(new int[] { 144, 0, 0, 0 });
+            this.udDisplayFPS3D.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            this.udDisplayFPS3D.Name = "udDisplayFPS3D";
+            this.udDisplayFPS3D.Size = new System.Drawing.Size(48, 20);
+            this.udDisplayFPS3D.TabIndex = 98;
+            this.udDisplayFPS3D.TinyStep = false;
+            this.toolTip1.SetToolTip(this.udDisplayFPS3D, "3D display frames per second (approximate)");
+            this.udDisplayFPS3D.Value = new decimal(new int[] { 30, 0, 0, 0 });
+            this.udDisplayFPS3D.ValueChanged += new System.EventHandler(this.udDisplayFPS3D_ValueChanged);
+            //
+            // lblDisplayFPS3D
+            //
+            this.lblDisplayFPS3D.AutoSize = true;
+            this.lblDisplayFPS3D.Image = null;
+            this.lblDisplayFPS3D.Location = new System.Drawing.Point(132, 19);
+            this.lblDisplayFPS3D.Name = "lblDisplayFPS3D";
+            this.lblDisplayFPS3D.Size = new System.Drawing.Size(48, 13);
+            this.lblDisplayFPS3D.TabIndex = 99;
+            this.lblDisplayFPS3D.Text = "3D FPS:";
             // 
             // tpDisplayTop
             // 
@@ -72629,6 +72657,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.udDisplayCPUMeter)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.udDisplayPeakText)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.udDisplayFPS)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.udDisplayFPS3D)).EndInit();
             this.tpDisplayTop.ResumeLayout(false);
             this.grpDisplayWaterfall.ResumeLayout(false);
             this.grpDisplayWaterfall.PerformLayout();
@@ -73580,6 +73609,8 @@
         private ComboBoxTS comboKBModeDown;
         private LabelTS lblDisplayFPS;
         private NumericUpDownTS udDisplayFPS;
+        private LabelTS lblDisplayFPS3D;
+        private NumericUpDownTS udDisplayFPS3D;
         public TabPage tpAudio;
         private TabPage tpTransmit;
         private NumericUpDownTS udTXFilterHigh;
