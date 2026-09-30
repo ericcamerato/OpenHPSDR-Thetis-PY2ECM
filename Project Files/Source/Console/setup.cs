@@ -105,6 +105,10 @@ namespace Thetis
         // WDSP 2.10 NNR controls are created here instead of in the generated
         // designer file to keep the PY2ECM changes small and merge-friendly.
         private readonly NumericUpDownTS[,] nudNNR = new NumericUpDownTS[2, 7];
+        // Mode 0: 3D Pan; mode 1: 3D Panafall. Each unchecked option follows RX Display.
+        private readonly CheckBoxTS[,] chk3DColorOverride = new CheckBoxTS[2, 2];
+        private readonly ColorButton[,] clrbtn3DColor = new ColorButton[2, 2];
+        private readonly TrackBarTS[,] tb3DColorAlpha = new TrackBarTS[2, 2];
 
         #endregion
 
@@ -128,6 +132,7 @@ namespace Thetis
             console = c;
             this.Owner = c;
 
+            Initialize3DDisplayColorControls();
             InitializeNNRControls();
 
             _frmBandwidth = new frmBandwidth();
@@ -135,6 +140,83 @@ namespace Thetis
             LogTool.Completed("INITCOMPSETUP");
 
             //everything here moved to AfterConstructor, which is called during singleton instance // G7KLJ's idea/implementation
+        }
+
+        private void Initialize3DDisplayColorControls()
+        {
+            string[] modes = { "3D Pan", "3D Panafall" };
+            string[] suffixes = { "Pan", "Panafall" };
+            string[] fields = { "Active Peak", "Data Line" };
+            string[] fieldSuffixes = { "ActivePeak", "DataLine" };
+
+            for (int mode = 0; mode < 2; mode++)
+            {
+                GroupBoxTS group = new GroupBoxTS
+                {
+                    Name = "grp3DColors" + suffixes[mode],
+                    Text = modes[mode] + " (check to customize)                                      Alpha",
+                    Location = new Point(283, 254 + mode * 76),
+                    Size = new Size(431, 74)
+                };
+
+                for (int field = 0; field < 2; field++)
+                {
+                    int top = 17 + field * 25;
+                    CheckBoxTS enabled = new CheckBoxTS
+                    {
+                        Name = "chk3D" + suffixes[mode] + fieldSuffixes[field],
+                        Text = fields[field],
+                        Location = new Point(9, top + 3),
+                        Size = new Size(112, 19)
+                    };
+                    ColorButton color = new ColorButton
+                    {
+                        Name = "clrbtn3D" + suffixes[mode] + fieldSuffixes[field],
+                        Color = field == 0 ? Color.Gray : Color.White,
+                        Selectable = true,
+                        Location = new Point(128, top),
+                        Size = new Size(40, 23)
+                    };
+                    TrackBarTS alpha = new TrackBarTS
+                    {
+                        Name = "tb3D" + suffixes[mode] + fieldSuffixes[field] + "Alpha",
+                        AutoSize = false,
+                        Minimum = 0,
+                        Maximum = 255,
+                        TickFrequency = 50,
+                        Value = field == 0 ? 70 : 128,
+                        Location = new Point(182, top + 2),
+                        Size = new Size(231, 18)
+                    };
+                    chk3DColorOverride[mode, field] = enabled;
+                    clrbtn3DColor[mode, field] = color;
+                    tb3DColorAlpha[mode, field] = alpha;
+                    enabled.CheckedChanged += ThreeDDisplayColor_Changed;
+                    color.Changed += ThreeDDisplayColor_Changed;
+                    alpha.Scroll += ThreeDDisplayColor_Changed;
+                    group.Controls.Add(enabled);
+                    group.Controls.Add(color);
+                    group.Controls.Add(alpha);
+                }
+                tpAppearanceDisplay.Controls.Add(group);
+            }
+        }
+
+        private void ThreeDDisplayColor_Changed(object sender, EventArgs e)
+        {
+            if (!initializing) Apply3DDisplayColors();
+        }
+
+        private void Apply3DDisplayColors()
+        {
+            for (int mode = 0; mode < 2; mode++)
+            {
+                Color? peak = chk3DColorOverride[mode, 0].Checked ?
+                    Color.FromArgb(tb3DColorAlpha[mode, 0].Value, clrbtn3DColor[mode, 0].Color) : (Color?)null;
+                Color? line = chk3DColorOverride[mode, 1].Checked ?
+                    Color.FromArgb(tb3DColorAlpha[mode, 1].Value, clrbtn3DColor[mode, 1].Color) : (Color?)null;
+                Display.Set3DDisplayColors(mode, peak, line);
+            }
         }
 
         private void InitializeNNRControls()
@@ -1928,6 +2010,14 @@ namespace Thetis
             // these will be removed in saveOptions
             handleOutdatedOptions(ref a);
 
+            // Older databases do not contain these opt-in settings. Switching to one
+            // must not retain custom 3D colors from a previously loaded database.
+            if (recoveryList == null)
+                for (int mode = 0; mode < 2; mode++)
+                    for (int field = 0; field < 2; field++)
+                        if (!a.ContainsKey(chk3DColorOverride[mode, field].Name))
+                            chk3DColorOverride[mode, field].Checked = false;
+
             List<string> sortedList = a.Keys.ToList();
             sortedList.Sort();
 
@@ -2243,6 +2333,7 @@ namespace Thetis
             }
 
             _gettingOptions = false;
+            Apply3DDisplayColors();
         }
 
         private string KeyToString(Keys k)

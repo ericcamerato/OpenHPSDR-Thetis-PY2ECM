@@ -2218,6 +2218,23 @@ namespace Thetis
                 }
             }
         }
+        // Optional RX appearance for the two 3D modes. Null follows the ordinary panadapter.
+        private static readonly Color?[] dataPeaks3DColors = new Color?[2];
+        private static readonly Color?[] dataLine3DColors = new Color?[2];
+        private static readonly SharpDX.Direct2D1.Brush[] dataPeaks3DBrushes = new SharpDX.Direct2D1.Brush[2];
+        private static readonly SharpDX.Direct2D1.Brush[] dataLine3DBrushes = new SharpDX.Direct2D1.Brush[2];
+
+        public static void Set3DDisplayColors(int mode, Color? activePeak, Color? dataLine)
+        {
+            if (mode < 0 || mode > 1) return;
+            lock (_objDX2Lock)
+            {
+                if (dataPeaks3DColors[mode] == activePeak && dataLine3DColors[mode] == dataLine) return;
+                dataPeaks3DColors[mode] = activePeak;
+                dataLine3DColors[mode] = dataLine;
+                buildDX2Resources();
+            }
+        }
         private static Color data_line_color = Color.White;
         private static Pen data_line_pen = new Pen(new SolidBrush(data_line_color), 1.0F);
         public static Color DataLineColor
@@ -5077,6 +5094,9 @@ namespace Thetis
             float centreX = (width - 1f) / 2f;
             float dbRange = Math.Max(1f, gridMax - gridMin);
             bool useGradient = transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient;
+            int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+            SharpDX.Direct2D1.Brush terrainPeakBrush = !transmitting && dataPeaks3DBrushes[mode] != null ?
+                dataPeaks3DBrushes[mode] : m_bDX2_3DPeakBrush;
 
             // Alternating history traces bounds the draw-call cost in either mode.
             for (int age = panafall3DCount - 1; age >= 0; age--)
@@ -5115,7 +5135,7 @@ namespace Thetis
                     if (sample > 0)
                         _d2dRenderTarget.DrawLine(previous, point,
                             prominence > 0.55f && !transmitting ?
-                            m_bDX2_3DPeakBrush : terrainBrush, 1f);
+                            terrainPeakBrush : terrainBrush, 1f);
                     previous = point;
                 }
                 terrainBrush.Opacity = originalOpacity;
@@ -5311,6 +5331,15 @@ namespace Thetis
                 }
                 fillPeaksBrush = m_bDX2_dataPeaks_fill_fpen_brush;
                 line_width = _display_line_width;
+            }
+
+            if (panafall3DEnabled && !local_mox &&
+                (current_display_mode == DisplayMode.PANADAPTER ||
+                 current_display_mode == DisplayMode.PANAFALL))
+            {
+                int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+                if (dataLine3DBrushes[mode] != null) lineBrush = dataLine3DBrushes[mode];
+                if (dataPeaks3DBrushes[mode] != null) fillPeaksBrush = dataPeaks3DBrushes[mode];
             }
 
             float dbmToPixel = H / (float)yRange;
@@ -8301,6 +8330,11 @@ namespace Thetis
             _bRebuildTXLinearGradBrush = false;
 
             if (m_bDX2_dataPeaks_fill_fpen_brush != null) Utilities.Dispose(ref m_bDX2_dataPeaks_fill_fpen_brush);
+            for (int mode = 0; mode < 2; mode++)
+            {
+                if (dataPeaks3DBrushes[mode] != null) Utilities.Dispose(ref dataPeaks3DBrushes[mode]);
+                if (dataLine3DBrushes[mode] != null) Utilities.Dispose(ref dataLine3DBrushes[mode]);
+            }
             if (m_bDX2_data_fill_fpen_brush != null) Utilities.Dispose(ref m_bDX2_data_fill_fpen_brush);
             if (m_bDX2_data_fill_fpen_brush_tx != null) Utilities.Dispose(ref m_bDX2_data_fill_fpen_brush_tx);
             if (m_bDX2_data_line_pen_brush != null) Utilities.Dispose(ref m_bDX2_data_line_pen_brush);
@@ -8371,6 +8405,11 @@ namespace Thetis
             m_brushLGDataLineTX_RX2 = null;
 
             m_bDX2_dataPeaks_fill_fpen_brush = null;
+            for (int mode = 0; mode < 2; mode++)
+            {
+                dataPeaks3DBrushes[mode] = null;
+                dataLine3DBrushes[mode] = null;
+            }
             m_bDX2_data_fill_fpen_brush = null;
             m_bDX2_data_fill_fpen_brush_tx = null;
             m_bDX2_data_line_pen_brush = null;
@@ -8464,6 +8503,13 @@ namespace Thetis
                 _bRebuildTXLinearGradBrush = true;
 
                 m_bDX2_dataPeaks_fill_fpen_brush = convertBrush((SolidBrush)dataPeaks_fill_fpen.Brush);
+                for (int mode = 0; mode < 2; mode++)
+                {
+                    if (dataPeaks3DColors[mode].HasValue)
+                        dataPeaks3DBrushes[mode] = getDXBrushForColour(dataPeaks3DColors[mode].Value);
+                    if (dataLine3DColors[mode].HasValue)
+                        dataLine3DBrushes[mode] = getDXBrushForColour(dataLine3DColors[mode].Value);
+                }
                 m_bDX2_data_fill_fpen_brush = convertBrush((SolidBrush)data_fill_fpen.Brush);
                 m_bDX2_data_fill_fpen_brush_tx = convertBrush((SolidBrush)data_fill_fpen_tx.Brush);
                 m_bDX2_data_line_pen_brush = convertBrush((SolidBrush)data_line_pen.Brush);
