@@ -195,7 +195,7 @@ namespace Thetis
 
         private bool was_panadapter = false;				// used to restore panadater when switching to spectrum DSP mode
         private bool was_3d_panadapter = false;
-        private bool was_aether_3d = false;
+        private bool was_3d_panafall = false;
         private bool was_waterfall = false;					// used to restore waterfall when switching to spectrum DSP mode
 
         public float[] rx1_preamp_offset;					// offset values for each preamp mode in dB
@@ -5678,7 +5678,7 @@ namespace Thetis
                 comboDisplayMode.Items.Add(s);
             }
             comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("Panadapter") + 1, "3D Pan");
-            comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("3D Pan") + 1, "Aether 3D");
+            comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("3D Pan") + 1, "3D Panafall");
         }
 
         private void InitAGCModes()
@@ -28545,9 +28545,9 @@ namespace Thetis
             _pause_DisplayThread = true;
             DisplayMode old_mode = Display.CurrentDisplayMode;
             _panafall3d_enabled = comboDisplayMode.Text == "3D Pan" ||
-                comboDisplayMode.Text == "Aether 3D";
+                comboDisplayMode.Text == "3D Panafall";
             Display.Panafall3DEnabled = _panafall3d_enabled;
-            Display.Panafall3DWaterfallEnabled = comboDisplayMode.Text == "Aether 3D";
+            Display.Panafall3DWaterfallEnabled = comboDisplayMode.Text == "3D Panafall";
 
             switch (comboDisplayMode.Text)
             {
@@ -28595,7 +28595,7 @@ namespace Thetis
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 1, 0, 0, 0);
                     break;
                 case "Panafall":
-                case "Aether 3D":
+                case "3D Panafall":
                     Display.CurrentDisplayMode = DisplayMode.PANAFALL;
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 0, 0, 0, 0);
                     CalcDisplayFreq();
@@ -28752,7 +28752,7 @@ namespace Thetis
 
             was_panadapter = false;
             was_3d_panadapter = false;
-            was_aether_3d = false;
+            was_3d_panafall = false;
             was_waterfall = false;
             UpdateRX1DisplayOffsets();
             UpdateRX2DisplayOffsets();
@@ -35125,7 +35125,7 @@ namespace Thetis
                     radModeSPEC.BackColor = SystemColors.Control;
                     comboDisplayMode.Items.Insert(1, "Panadapter");
                     comboDisplayMode.Items.Insert(2, "3D Pan");
-                    comboDisplayMode.Items.Insert(3, "Aether 3D");
+                    comboDisplayMode.Items.Insert(3, "3D Panafall");
                     comboDisplayMode.Items.Insert(5, "Waterfall");
                     ptbFilterShift.Enabled = true;
                     btnFilterShiftReset.Enabled = true;
@@ -35133,7 +35133,7 @@ namespace Thetis
                         EnableAllFilters();
                     RX1Filter = rx1_filter;
                     //if_shift = true;
-                    if (was_aether_3d) comboDisplayMode.Text = "Aether 3D";
+                    if (was_3d_panafall) comboDisplayMode.Text = "3D Panafall";
                     else if (was_3d_panadapter) comboDisplayMode.Text = "3D Pan";
                     else if (was_panadapter) comboDisplayMode.Text = "Panadapter";
                     else if (was_waterfall) comboDisplayMode.Text = "Waterfall";
@@ -35411,20 +35411,20 @@ namespace Thetis
                     ptbFilterShift.Enabled = false;
                     btnFilterShiftReset.Enabled = false;
                     bool save_3d_pan = comboDisplayMode.Text == "3D Pan";
-                    bool save_aether_3d = comboDisplayMode.Text == "Aether 3D";
+                    bool save_3d_panafall = comboDisplayMode.Text == "3D Panafall";
                     bool save_pan = Display.CurrentDisplayMode == DisplayMode.PANADAPTER && !save_3d_pan;
                     bool save_water = (Display.CurrentDisplayMode == DisplayMode.WATERFALL);
-                    if (save_pan || save_3d_pan || save_aether_3d || save_water)
+                    if (save_pan || save_3d_pan || save_3d_panafall || save_water)
                     {
                         comboDisplayMode.Text = "Spectrum";
                     }
                     comboDisplayMode.Items.Remove("Panadapter");
                     comboDisplayMode.Items.Remove("3D Pan");
-                    comboDisplayMode.Items.Remove("Aether 3D");
+                    comboDisplayMode.Items.Remove("3D Panafall");
                     comboDisplayMode.Items.Remove("Waterfall");
                     was_panadapter = save_pan;
                     was_3d_panadapter = save_3d_pan;
-                    was_aether_3d = save_aether_3d;
+                    was_3d_panafall = save_3d_panafall;
                     was_waterfall = save_water;
                     radio.GetDSPRX(0, 0).SpectrumPreFilter = true;
                     Display.RXDisplayLow = -(int)sample_rate_rx1 / 2;

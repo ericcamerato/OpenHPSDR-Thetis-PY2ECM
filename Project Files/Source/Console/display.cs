@@ -5079,7 +5079,7 @@ namespace Thetis
 
             if (panafall3DWaterfallEnabled)
             {
-                DrawAetherInspired3DHistory(verticalShift, width, height,
+                Draw3DPanafallHistory(verticalShift, width, height,
                     gridMax, gridMin, fillBrush, transmitting);
                 return;
             }
@@ -5145,9 +5145,8 @@ namespace Thetis
             fillBrush.Opacity = fillOpacity;
         }
 
-        // Original SharpDX rendering inspired by stacked-trace SDR displays.
-        // No AetherSDR source code is incorporated here.
-        private static void DrawAetherInspired3DHistory(int verticalShift, int width,
+        // Original SharpDX rendering for the combined 3D spectrum and waterfall mode.
+        private static void Draw3DPanafallHistory(int verticalShift, int width,
             int height, int gridMax, int gridMin,
             SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
         {
