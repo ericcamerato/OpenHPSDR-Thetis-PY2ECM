@@ -1651,7 +1651,6 @@ namespace Thetis
         private static long panafall3DLeftEdge;
         private static long panafall3DRightEdge;
         private static bool panafall3DEnabled;
-        private static bool panafall3DWaterfallEnabled;
         private static bool? panafall3DLastTx;
 
         public static bool Panafall3DEnabled
@@ -1661,17 +1660,6 @@ namespace Thetis
             {
                 if (panafall3DEnabled == value) return;
                 panafall3DEnabled = value;
-                ResetPanafall3DHistory();
-            }
-        }
-
-        public static bool Panafall3DWaterfallEnabled
-        {
-            get { return panafall3DWaterfallEnabled; }
-            set
-            {
-                if (panafall3DWaterfallEnabled == value) return;
-                panafall3DWaterfallEnabled = value;
                 ResetPanafall3DHistory();
             }
         }
@@ -5077,76 +5065,12 @@ namespace Thetis
                     panafall3DCount++;
             }
 
-            if (panafall3DWaterfallEnabled)
-            {
-                Draw3DPanafallHistory(verticalShift, width, height,
-                    gridMax, gridMin, fillBrush, transmitting);
-                return;
-            }
-
-            float centreX = width / 2f;
-            float gridOpacity = m_bDX2_grid_pen.Opacity;
-            m_bDX2_grid_pen.Opacity = 0.35f;
-            for (int lane = 0; lane <= 8; lane++)
-            {
-                float frontX = lane * (width - 1f) / 8f;
-                float rearX = centreX + (frontX - centreX) * 0.72f;
-                _d2dRenderTarget.DrawLine(
-                    new SharpDX.Vector2(rearX, verticalShift + height * 0.45f),
-                    new SharpDX.Vector2(frontX, verticalShift + height),
-                    m_bDX2_grid_pen, 1f);
-            }
-            for (int plane = 0; plane <= 6; plane++)
-            {
-                float depth = plane / 6f;
-                float halfWidth = width * (1f - 0.28f * depth) / 2f;
-                float floorY = verticalShift + height * (1f - 0.55f * depth);
-                _d2dRenderTarget.DrawLine(
-                    new SharpDX.Vector2(centreX - halfWidth, floorY),
-                    new SharpDX.Vector2(centreX + halfWidth, floorY),
-                    m_bDX2_grid_pen, 1f);
-            }
-            m_bDX2_grid_pen.Opacity = gridOpacity;
-
-            bool useGradient = transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient;
-            float fillOpacity = fillBrush.Opacity;
-            float dbRange = Math.Max(1, gridMax - gridMin);
-            for (int age = panafall3DCount - 1; age >= 0; age--)
-            {
-                int row = (panafall3DHead - age + Panafall3DRows) % Panafall3DRows;
-                float depth = age / (float)Math.Max(1, Panafall3DRows - 1);
-                float horizontalScale = 1f - 0.28f * depth;
-                float floorY = verticalShift + height * (1f - 0.55f * depth);
-                float heightScale = 1f - 0.40f * depth;
-                float columnWidth = Math.Max(2f,
-                    width * horizontalScale / (Panafall3DSamples - 1) + 0.5f);
-                SharpDX.Direct2D1.Brush paletteBrush = depth > 0.66f ?
-                    m_bDX2_3DFarBrush : depth > 0.33f ? m_bDX2_3DMidBrush : m_bDX2_3DNearBrush;
-                SharpDX.Direct2D1.Brush terrainBrush = useGradient ? fillBrush :
-                    transmitting ? m_bDX2_3DTxBrush : paletteBrush;
-
-                for (int sample = 0; sample < Panafall3DSamples; sample++)
-                {
-                    float x = centreX + (sample * (width - 1f) / (Panafall3DSamples - 1) - centreX) * horizontalScale;
-                    float level = Math.Max(0f, Math.Min(1f,
-                        (gridMax - panafall3DHistory[row, sample]) / dbRange));
-                    float prominence = Math.Max(0f, Math.Min(1f,
-                        (panafall3DHistory[row, sample] - panafall3DBaseline[row] - 7f) / 22f));
-                    float y = Math.Max(verticalShift + height * 0.10f,
-                        floorY - (1f - level) * height * heightScale -
-                        prominence * height * 0.22f * depth);
-                    SharpDX.Vector2 point = new SharpDX.Vector2(x, y);
-                    SharpDX.Direct2D1.Brush columnBrush = !transmitting && !useGradient && age <= 2 && level < 0.32f ?
-                        m_bDX2_3DPeakBrush : terrainBrush;
-                    _d2dRenderTarget.DrawLine(point,
-                        new SharpDX.Vector2(x, floorY), columnBrush, columnWidth);
-                }
-            }
-            fillBrush.Opacity = fillOpacity;
+            Draw3DStackedHistory(verticalShift, width, height,
+                gridMax, gridMin, fillBrush, transmitting);
         }
 
-        // Original SharpDX rendering for the combined 3D spectrum and waterfall mode.
-        private static void Draw3DPanafallHistory(int verticalShift, int width,
+        // Shared SharpDX rendering for full-height 3D Pan and 3D Panafall.
+        private static void Draw3DStackedHistory(int verticalShift, int width,
             int height, int gridMax, int gridMin,
             SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
         {
@@ -5154,8 +5078,7 @@ namespace Thetis
             float dbRange = Math.Max(1f, gridMax - gridMin);
             bool useGradient = transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient;
 
-            // Half the traces keeps the combined 3D/waterfall mode within the
-            // draw-call budget of the original full-height 3D panadapter.
+            // Alternating history traces bounds the draw-call cost in either mode.
             for (int age = panafall3DCount - 1; age >= 0; age--)
             {
                 if ((age & 1) != 0 && age != panafall3DCount - 1) continue;

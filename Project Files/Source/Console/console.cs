@@ -28547,7 +28547,6 @@ namespace Thetis
             _panafall3d_enabled = comboDisplayMode.Text == "3D Pan" ||
                 comboDisplayMode.Text == "3D Panafall";
             Display.Panafall3DEnabled = _panafall3d_enabled;
-            Display.Panafall3DWaterfallEnabled = comboDisplayMode.Text == "3D Panafall";
 
             switch (comboDisplayMode.Text)
             {
