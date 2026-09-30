@@ -248,6 +248,10 @@ namespace Thetis
         _MACRO_29,
         _MACRO_30,
 
+        // Append new IDs so existing serialized button IDs retain their values.
+        NR5,
+        NR6,
+
         INFO_TEXT = 998,
         SPLITTER = 999,
 
@@ -550,6 +554,8 @@ namespace Thetis
             (OtherButtonId.NR2,            1, 2, "NR2", "", "", "NR2 on/off"),
             (OtherButtonId.NR3,            1, 3, "NR3", "", "", "NR3 on/off"),
             (OtherButtonId.NR4,            1, 4, "NR4", "", "", "NR4 on/off"),
+            (OtherButtonId.NR5,            1, 22, "NR5", "", "", "NR5 neural noise reduction on/off"),
+            (OtherButtonId.NR6,            1, 23, "NR6", "", "", "NR6 premium neural noise reduction on/off"),
             (OtherButtonId.ANF,            1, 5, "ANF", "", "", "Auto notch filter"),
             (OtherButtonId.NB,             1, 6, "NB", "", "", "Cycle through noise blankers"),
             (OtherButtonId.NB1,            1, 7, "NB1", "", "", "NB1 on/off"),
