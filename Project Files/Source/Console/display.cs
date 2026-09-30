@@ -1651,6 +1651,7 @@ namespace Thetis
         private static long panafall3DLeftEdge;
         private static long panafall3DRightEdge;
         private static bool panafall3DEnabled;
+        private static bool panafall3DWaterfallEnabled;
         private static bool? panafall3DLastTx;
 
         public static bool Panafall3DEnabled
@@ -1660,6 +1661,17 @@ namespace Thetis
             {
                 if (panafall3DEnabled == value) return;
                 panafall3DEnabled = value;
+                ResetPanafall3DHistory();
+            }
+        }
+
+        public static bool Panafall3DWaterfallEnabled
+        {
+            get { return panafall3DWaterfallEnabled; }
+            set
+            {
+                if (panafall3DWaterfallEnabled == value) return;
+                panafall3DWaterfallEnabled = value;
                 ResetPanafall3DHistory();
             }
         }
@@ -5065,6 +5077,13 @@ namespace Thetis
                     panafall3DCount++;
             }
 
+            if (panafall3DWaterfallEnabled)
+            {
+                DrawAetherInspired3DHistory(verticalShift, width, height,
+                    gridMax, gridMin, fillBrush, transmitting);
+                return;
+            }
+
             float centreX = width / 2f;
             float gridOpacity = m_bDX2_grid_pen.Opacity;
             m_bDX2_grid_pen.Opacity = 0.35f;
@@ -5124,6 +5143,61 @@ namespace Thetis
                 }
             }
             fillBrush.Opacity = fillOpacity;
+        }
+
+        // Original SharpDX rendering inspired by stacked-trace SDR displays.
+        // No AetherSDR source code is incorporated here.
+        private static void DrawAetherInspired3DHistory(int verticalShift, int width,
+            int height, int gridMax, int gridMin,
+            SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
+        {
+            float centreX = (width - 1f) / 2f;
+            float dbRange = Math.Max(1f, gridMax - gridMin);
+            bool useGradient = transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient;
+
+            // Half the traces keeps the combined 3D/waterfall mode within the
+            // draw-call budget of the original full-height 3D panadapter.
+            for (int age = panafall3DCount - 1; age >= 0; age--)
+            {
+                if ((age & 1) != 0 && age != panafall3DCount - 1) continue;
+
+                int row = (panafall3DHead - age + Panafall3DRows) % Panafall3DRows;
+                float depth = age / (float)Math.Max(1, Panafall3DRows - 1);
+                float horizontalScale = 1f - 0.12f * depth;
+                float floorY = verticalShift + height * (0.96f - 0.44f * depth);
+                float amplitude = height * (0.79f - 0.24f * depth);
+                float columnWidth = Math.Max(1.5f,
+                    width * horizontalScale / (Panafall3DSamples - 1));
+                SharpDX.Direct2D1.Brush paletteBrush = depth > 0.66f ?
+                    m_bDX2_3DFarBrush : depth > 0.33f ?
+                    m_bDX2_3DMidBrush : m_bDX2_3DNearBrush;
+                SharpDX.Direct2D1.Brush terrainBrush = useGradient ? fillBrush :
+                    transmitting ? m_bDX2_3DTxBrush : paletteBrush;
+                float originalOpacity = terrainBrush.Opacity;
+                terrainBrush.Opacity = originalOpacity * (0.38f + 0.35f * (1f - depth));
+
+                SharpDX.Vector2 previous = new SharpDX.Vector2();
+                for (int sample = 0; sample < Panafall3DSamples; sample++)
+                {
+                    float level = Math.Max(0f, Math.Min(1f,
+                        (panafall3DHistory[row, sample] - gridMin) / dbRange));
+                    float prominence = Math.Max(0f, Math.Min(1f,
+                        (panafall3DHistory[row, sample] - panafall3DBaseline[row] - 5f) / 25f));
+                    float x = centreX +
+                        (sample * (width - 1f) / (Panafall3DSamples - 1) - centreX) * horizontalScale;
+                    float y = Math.Max(verticalShift + height * 0.04f,
+                        floorY - level * amplitude - prominence * height * 0.12f);
+                    SharpDX.Vector2 point = new SharpDX.Vector2(x, y);
+                    _d2dRenderTarget.DrawLine(point, new SharpDX.Vector2(x, floorY),
+                        terrainBrush, columnWidth);
+                    if (sample > 0)
+                        _d2dRenderTarget.DrawLine(previous, point,
+                            prominence > 0.55f && !transmitting ?
+                            m_bDX2_3DPeakBrush : terrainBrush, 1f);
+                    previous = point;
+                }
+                terrainBrush.Opacity = originalOpacity;
+            }
         }
 
         unsafe static private bool DrawPanadapterDX2D(int nVerticalShift, int W, int H, int rx, bool bottom)
