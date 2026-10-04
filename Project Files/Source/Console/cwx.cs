@@ -1603,12 +1603,16 @@ namespace Thetis
             label5.Visible = false;
             label6.Visible = false;
             label7.Visible = false;
-            neuralRxEnabled = new CheckBox { Text = "Neural CW RX (RX1)", Location = new Point(12, 177), AutoSize = true };
-            neuralRxStatus = new Label { Text = "Off", Location = new Point(185, 178), Size = new Size(400, 17) };
-            neuralRxClear = new Button { Text = "Clear RX", Location = new Point(603, 174), Size = new Size(74, 22) };
+            neuralRxEnabled = new CheckBox { Text = "Neural CW RX (RX1)", Location = new Point(12, 185), AutoSize = true };
+            neuralRxStatus = new Label
+            {
+                Text = "Off", Location = new Point(220, 183), Size = new Size(270, 22),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            neuralRxClear = new Button { Text = "Clear RX", Location = new Point(603, 183), Size = new Size(74, 22) };
             neuralRxText = new TextBox
             {
-                Location = new Point(12, 199), Size = new Size(665, 65), Multiline = true,
+                Location = new Point(12, 210), Size = new Size(665, 53), Multiline = true,
                 ReadOnly = true, ScrollBars = ScrollBars.Vertical, TabStop = false,
                 BackColor = Color.FromArgb(14, 23, 28), ForeColor = Color.LightGreen
             };
@@ -1662,8 +1666,9 @@ namespace Thetis
             if (!active)
                 neuralRxStatus.Text = "Select CWL/CWU on RX1; TX pauses decoding";
             else if (neuralDecoder.ToneHz > 0)
-                neuralRxStatus.Text = string.Format("Listening | {0:0} Hz | key {1:0.0}",
-                    neuralDecoder.ToneHz, neuralDecoder.KeyingRatio);
+                neuralRxStatus.Text = string.Format("{0} | {1:0} Hz | key {2:0.0}/{3:0}",
+                    neuralDecoder.KeyingRatio >= NeuralCwDecoder.MinimumKeyingRatio ? "Listening" : "Below gate",
+                    neuralDecoder.ToneHz, neuralDecoder.KeyingRatio, NeuralCwDecoder.MinimumKeyingRatio);
             else
                 neuralRxStatus.Text = "Listening | waiting for RX audio";
         }
