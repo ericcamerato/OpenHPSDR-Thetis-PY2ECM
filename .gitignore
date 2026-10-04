@@ -397,6 +397,7 @@ FodyWeavers.xsd
 # Local PY2ECM release packaging and verification artifacts
 /.release-work/
 /release-assets/
+/neural-cw-test-data/
 
 # Local PY2ECM development notes (not part of the public source or packages)
 /README-BETA1.md
