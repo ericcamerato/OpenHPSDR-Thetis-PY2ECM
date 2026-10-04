@@ -21,6 +21,10 @@ namespace Thetis
         private const int Hop = 48;
         private const int Bins = 65;
         private const int FirSize = 121;
+        // Thetis post-DSP audio can have a lower keying ratio than Lyra's raw
+        // input: a clearly audible CW signal was measured at 10.5 and was
+        // previously rejected by the 12.0 gate before model inference.
+        internal const double MinimumKeyingRatio = 7.0;
         private static readonly string ModelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
         private readonly ConcurrentQueue<AudioBlock> pending = new ConcurrentQueue<AudioBlock>();
         private readonly AutoResetEvent wake = new AutoResetEvent(false);
@@ -179,7 +183,7 @@ namespace Thetis
             float[] conditioned = Condition(audio, tone, out double ratio);
             Volatile.Write(ref lastToneHz, tone);
             Volatile.Write(ref lastKeyingRatio, ratio);
-            if (ratio < 12.0)
+            if (ratio < MinimumKeyingRatio)
             {
                 committed = Math.Max(committed, settleTo);
                 if (!idle) { idle = true; TextReceived?.Invoke(" "); }
@@ -248,14 +252,22 @@ namespace Thetis
         private static double DetectTone(float[] audio)
         {
             var fft = new Complex[4096];
-            for (int i = 0; i < fft.Length; i++) fft[i] = audio[audio.Length - fft.Length + i];
-            Fft(fft);
+            var energy = new double[1536];
+            // A pause in the final second used to make the tuner lock onto
+            // noise instead of the CW tone for the entire six-second window.
+            for (int end = fft.Length; end <= audio.Length; end += Rate)
+            {
+                for (int i = 0; i < fft.Length; i++)
+                    fft[i] = audio[end - fft.Length + i] * (0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (fft.Length - 1)));
+                Fft(fft);
+                for (int b = 512; b < 1536; b++)
+                    energy[b] += fft[b].Magnitude * fft[b].Magnitude;
+            }
             int best = 512;
             double peak = -1;
             for (int b = 512; b < 1536; b++)
             {
-                double magnitude = fft[b].Magnitude;
-                if (magnitude > peak) { peak = magnitude; best = b; }
+                if (energy[b] > peak) { peak = energy[b]; best = b; }
             }
             return (double)best * Rate / 4096;
         }
@@ -282,7 +294,9 @@ namespace Thetis
                 peak = Math.Max(peak, Math.Abs(v));
             }
             Array.Sort(envelope);
-            ratio = (envelope[n - 1 - n / 10] * rms) / (envelope[n / 10] * rms + 1e-3);
+            // The gate must depend on tone-to-noise contrast, not absolute AF
+            // volume. A fixed 0.001 floor rejected weak but clean RX audio.
+            ratio = envelope[n - 1 - n / 10] / (envelope[n / 10] + 1e-6);
             for (int i = 0; i < n; i++) result[i] /= (float)(peak + 1e-9);
             return result;
         }
