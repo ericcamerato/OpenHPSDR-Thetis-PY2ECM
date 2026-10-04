@@ -1644,6 +1644,12 @@ namespace Thetis
         private void UpdateNeuralRxRun()
         {
             if (neuralDecoder == null) return;
+            if (neuralDecoder.Error != null)
+            {
+                cmaster.SetCwRxAudioRun(0);
+                neuralRxStatus.Text = "CW RX error: " + neuralDecoder.Error;
+                return;
+            }
             bool cw = console != null && (console.RX1DSPMode == DSPMode.CWL || console.RX1DSPMode == DSPMode.CWU);
             bool active = cw && !console.MOX;
             cmaster.SetCwRxAudioRun(active ? 1 : 0);

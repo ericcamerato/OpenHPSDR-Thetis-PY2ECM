@@ -40,6 +40,7 @@ namespace Thetis
         private double committed;
         private bool idle;
         private bool disposed;
+        private volatile string fault;
 
         private struct AudioBlock
         {
@@ -48,6 +49,7 @@ namespace Thetis
         }
 
         internal static NeuralCwDecoder Current { get; private set; }
+        internal string Error { get { return fault; } }
         internal event Action<string> TextReceived;
         internal event Action<string> StatusChanged;
 
@@ -127,6 +129,8 @@ namespace Thetis
             }
             catch (Exception e)
             {
+                fault = e.Message;
+                running = false;
                 StatusChanged?.Invoke("CW RX error: " + e.Message);
             }
         }
