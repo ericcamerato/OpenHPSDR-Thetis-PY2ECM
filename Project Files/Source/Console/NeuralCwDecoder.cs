@@ -41,6 +41,8 @@ namespace Thetis
         private bool idle;
         private bool disposed;
         private volatile string fault;
+        private double lastToneHz;
+        private double lastKeyingRatio;
 
         private struct AudioBlock
         {
@@ -50,6 +52,8 @@ namespace Thetis
 
         internal static NeuralCwDecoder Current { get; private set; }
         internal string Error { get { return fault; } }
+        internal double ToneHz { get { return Volatile.Read(ref lastToneHz); } }
+        internal double KeyingRatio { get { return Volatile.Read(ref lastKeyingRatio); } }
         internal event Action<string> TextReceived;
         internal event Action<string> StatusChanged;
 
@@ -86,7 +90,15 @@ namespace Thetis
         {
             if (!running || stereo == null || count <= 0 || count > 65536 || Volatile.Read(ref queued) >= 8) return;
             float[] samples = ArrayPool<float>.Shared.Rent(count);
-            for (int i = 0; i < count; i++) samples[i] = (float)stereo[2 * i];
+            double leftPower = 0, rightPower = 0;
+            for (int i = 0; i < count; i++)
+            {
+                double left = stereo[2 * i], right = stereo[2 * i + 1];
+                leftPower += left * left;
+                rightPower += right * right;
+            }
+            int channel = rightPower > leftPower * 2.0 ? 1 : 0;
+            for (int i = 0; i < count; i++) samples[i] = (float)stereo[2 * i + channel];
             Interlocked.Increment(ref queued);
             pending.Enqueue(new AudioBlock { Samples = samples, Length = count });
             wake.Set();
@@ -165,6 +177,8 @@ namespace Thetis
             double settleTo = endTime - 1.3;
             double tone = DetectTone(audio);
             float[] conditioned = Condition(audio, tone, out double ratio);
+            Volatile.Write(ref lastToneHz, tone);
+            Volatile.Write(ref lastKeyingRatio, ratio);
             if (ratio < 12.0)
             {
                 committed = Math.Max(committed, settleTo);

@@ -1597,6 +1597,12 @@ namespace Thetis
 
         private void InitializeNeuralRx()
         {
+            // These legacy diagnostic labels were outside the original CWX client
+            // area. Enlarging the form exposes them on top of the TX key display.
+            label4.Visible = false;
+            label5.Visible = false;
+            label6.Visible = false;
+            label7.Visible = false;
             neuralRxEnabled = new CheckBox { Text = "Neural CW RX (RX1)", Location = new Point(12, 177), AutoSize = true };
             neuralRxStatus = new Label { Text = "Off", Location = new Point(185, 178), Size = new Size(400, 17) };
             neuralRxClear = new Button { Text = "Clear RX", Location = new Point(603, 174), Size = new Size(74, 22) };
@@ -1653,7 +1659,13 @@ namespace Thetis
             bool cw = console != null && (console.RX1DSPMode == DSPMode.CWL || console.RX1DSPMode == DSPMode.CWU);
             bool active = cw && !console.MOX;
             cmaster.SetCwRxAudioRun(active ? 1 : 0);
-            neuralRxStatus.Text = active ? "Listening" : "Select CWL/CWU on RX1; TX pauses decoding";
+            if (!active)
+                neuralRxStatus.Text = "Select CWL/CWU on RX1; TX pauses decoding";
+            else if (neuralDecoder.ToneHz > 0)
+                neuralRxStatus.Text = string.Format("Listening | {0:0} Hz | key {1:0.0}",
+                    neuralDecoder.ToneHz, neuralDecoder.KeyingRatio);
+            else
+                neuralRxStatus.Text = "Listening | waiting for RX audio";
         }
 
         private void SetNeuralRxStatus(string status)

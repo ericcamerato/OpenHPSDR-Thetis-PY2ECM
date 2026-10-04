@@ -12,8 +12,9 @@ namespace Thetis
 
     internal static class NeuralCwSmoke
     {
-        private static int Main()
+        private static int Main(string[] args)
         {
+            bool rightOnly = args.Length > 0 && args[0] == "--right-only";
             const int rate = 48000;
             const int dot = 2880; // 20 WPM
             var keyed = new List<bool>();
@@ -41,7 +42,8 @@ namespace Thetis
                     for (int i = 0; i < count; i++)
                     {
                         double sample = keyed[offset + i] ? 0.5 * Math.Sin(2 * Math.PI * 600 * (offset + i) / rate) : 0;
-                        stereo[2 * i] = stereo[2 * i + 1] = sample;
+                        stereo[2 * i] = rightOnly ? 0 : sample;
+                        stereo[2 * i + 1] = sample;
                     }
                     unsafe { fixed (double* pointer = stereo) decoder.Enqueue(count, pointer); }
                     Thread.Sleep(10);
