@@ -2,7 +2,8 @@
 setlocal EnableExtensions
 
 set "THETIS_DIR=T:\RadioDev\ThetisDev\OpenHPSDR-Thetis\neural-cw-test-stage\Project Files\bin\x64\Release"
-set "THETIS_DATA=T:\RadioDev\ThetisDev\OpenHPSDR-Thetis\neural-cw-test-stage\neural-cw-test-data"
+REM Replica do banco PY2ECM-WDSP210: nunca aponta para o AppData original.
+set "THETIS_DATA=T:\RadioDev\ThetisDev\OpenHPSDR-Thetis\neural-cw-test-stage\neural-cw-clone-data"
 set "MUTE_STARTED=0"
 
 if not exist "%THETIS_DIR%\Thetis.exe" (
@@ -32,7 +33,7 @@ if errorlevel 1 (
 )
 
 echo Starting Thetis PY2ECM Neural CW test...
-start "Thetis PY2ECM Neural CW Test" /WAIT /MAX /HIGH /D "%THETIS_DIR%" "%THETIS_DIR%\Thetis.exe" "-datapath:%THETIS_DATA%" -dbid:PY2ECM-NEURALCW-TEST -cmasioconfig -neuralcwrx
+start "Thetis PY2ECM Neural CW Test" /WAIT /MAX /HIGH /D "%THETIS_DIR%" "%THETIS_DIR%\Thetis.exe" "-datapath:%THETIS_DATA%" -dbid:PY2ECM-WDSP210 -cmasioconfig -neuralcwrx
 
 if "%MUTE_STARTED%"=="1" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'python.exe' -or $_.Name -eq 'pythonw.exe') -and $_.CommandLine -match 'start_key\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
