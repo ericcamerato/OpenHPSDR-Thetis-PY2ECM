@@ -426,6 +426,18 @@ void SendpOutboundTCIRxIQ (void (*Outbound)(int id, int nsamples, double* buff))
 }
 
 PORT
+void SendpOutboundCwRxAudio (void (*Outbound)(int nsamples, double* buff))
+{
+	pcm->OutboundCwRxAudio = Outbound;
+}
+
+PORT
+void SetCwRxAudioRun (int active)
+{
+	_InterlockedExchange(&pcm->cw_rx_audio_run, active ? 1 : 0);
+}
+
+PORT
 void SendpInboundTCITxAudio (void (*Inbound)(int nsamples, double* buff))
 {
 	pcm->InboundTCITxAudio = Inbound;

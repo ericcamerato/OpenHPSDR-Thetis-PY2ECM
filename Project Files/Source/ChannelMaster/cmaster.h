@@ -65,6 +65,8 @@ typedef struct _cmaster
 	void (*OutboundRx)(int id, int nsamples, double* buff);			// pointer to Outbound function called by aamix with rx audio from the global mixer
 	void (*OutboundTx)(int id, int nsamples, double* buff);			// pointer to Outbound function called by ilv with xmtr samples from the interleaver
 	void (*OutboundTCIRxIQ)(int id, int nsamples, double* buff);	// pointer to callback with receiver IQ samples
+	void (*OutboundCwRxAudio)(int nsamples, double* buff);	// optional RX1 CW decoder tap
+	volatile long cw_rx_audio_run;
 	void (*InboundTCITxAudio)(int nsamples, double* buff);			// pointer to callback to fill TX audio input
 	volatile long tci_rx_out_run;											// run TCI RX IQ/audio callbacks
 	int	audioCodecId;
@@ -109,6 +111,8 @@ extern void destroy_cmaster();
 extern __declspec (dllexport) void SendpOutboundRx (void (*Outbound)(int id, int nsamples, double* buff));
 extern __declspec (dllexport) void SendpOutboundTx (void (*Outbound)(int id, int nsamples, double* buff));
 extern __declspec (dllexport) void SendpOutboundTCIRxIQ (void (*Outbound)(int id, int nsamples, double* buff));
+extern __declspec (dllexport) void SendpOutboundCwRxAudio (void (*Outbound)(int nsamples, double* buff));
+extern __declspec (dllexport) void SetCwRxAudioRun (int active);
 extern __declspec (dllexport) void SendpInboundTCITxAudio (void (*Inbound)(int nsamples, double* buff));
 extern __declspec (dllexport) void SetRXTCIRun (int active);
 extern __declspec (dllexport) void SetTXTCIAudioRun (int txid, int active);

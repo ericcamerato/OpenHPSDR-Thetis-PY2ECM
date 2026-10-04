@@ -185,6 +185,8 @@ void xpipe (int stream, int pos, double** buffs)
 			for (i = 1; i < pcm->cmSubRCVR; i++)
 				for (j = 0; j < 2 * pcm->rcvr[rx].ch_outsize; j++)
 					ppip->rbuff[rx][j] += buffs[i][j];
+			if (_InterlockedAnd(&pcm->cw_rx_audio_run, 1) && pcm->OutboundCwRxAudio)
+				(*pcm->OutboundCwRxAudio)(pcm->rcvr[rx].ch_outsize, ppip->rbuff[rx]);
 			xscope(rx, 0, ppip->rbuff[rx]);														// scope
 			xvacOUT(rx, 1, ppip->rbuff[rx]);													// data to VAC
 			xtciOUT(rx, 1, ppip->rbuff[rx]);													// data to TCI rx audio
