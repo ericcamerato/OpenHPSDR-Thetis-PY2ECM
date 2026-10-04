@@ -261,6 +261,9 @@
       <HintPath>..\packages\Microsoft.CodeAnalysis.Scripting.Common.5.3.0\lib\netstandard2.0\Microsoft.CodeAnalysis.Scripting.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Microsoft.ML.OnnxRuntime">
+      <HintPath>..\packages\Microsoft.ML.OnnxRuntime.Managed.1.20.1\lib\netstandard2.0\Microsoft.ML.OnnxRuntime.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions, Version=10.0.0.7, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Extensions.DependencyInjection.Abstractions.10.0.7\lib\net462\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
     </Reference>
@@ -679,6 +682,7 @@
     <Compile Include="cwx.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="NeuralCwDecoder.cs" />
     <Compile Include="database.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1001,6 +1005,15 @@
     <None Include="Resources\lock_locked.png" />
     <None Include="Resources\lock_unlocked.png" />
     <None Include="packages.config" />
+    <Content Include="models\deepfist.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="models\deepfist.onnx.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="THIRD-PARTY-NEURAL-CW.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <None Include="Resources\play.png" />
     <None Include="Resources\timer_on.png" />
     <None Include="Resources\timer.png" />
@@ -1327,7 +1340,10 @@ echo         public static string BuildDate { get { return "%25formatted_date%25
 echo     } &gt;&gt; "$(ProjectDir)VersionInfo.cs"
 echo } &gt;&gt; "$(ProjectDir)VersionInfo.cs"
 </PreBuildEvent>
-    <PostBuildEvent>copy /Y "..\..\..\lib\fftw_$(PlatformName)\libfftw3-3.dll" "$(ProjectDir)$(OutDir)";
+    <PostBuildEvent>copy /Y "$(ProjectDir)..\packages\Microsoft.ML.OnnxRuntime.1.20.1\runtimes\win-x64\native\onnxruntime.dll" "$(ProjectDir)$(OutDir)";
+copy /Y "$(ProjectDir)..\packages\Microsoft.ML.OnnxRuntime.1.20.1\LICENSE" "$(ProjectDir)$(OutDir)ONNX-Runtime-LICENSE.txt";
+copy /Y "$(ProjectDir)..\packages\Microsoft.ML.OnnxRuntime.1.20.1\ThirdPartyNotices.txt" "$(ProjectDir)$(OutDir)ONNX-Runtime-ThirdPartyNotices.txt";
+copy /Y "..\..\..\lib\fftw_$(PlatformName)\libfftw3-3.dll" "$(ProjectDir)$(OutDir)";
 copy /Y "..\..\..\lib\fftw_$(PlatformName)\libfftw3f-3.dll" "$(ProjectDir)$(OutDir)";
 copy /Y "..\..\..\lib\NR_Algorithms_$(PlatformName)\rnnoise.dll" "$(ProjectDir)$(OutDir)";
 copy /Y "..\..\..\lib\NR_Algorithms_$(PlatformName)\rnnoise_avx2.dll" "$(ProjectDir)$(OutDir)";
