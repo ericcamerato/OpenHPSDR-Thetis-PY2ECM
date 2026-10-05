@@ -1488,9 +1488,9 @@ namespace Thetis
             if (DateTime.UtcNow >= TitleBar.BetaExpirationUtc)
             {
                 MessageBox.Show(
-                    "Thetis PY2ECM Beta 2 expired on " + TitleBar.BetaExpirationUtc.ToString("yyyy-MM-dd") + " (UTC).\n\n" +
+                    "Thetis PY2ECM Beta 3 expired on " + TitleBar.BetaExpirationUtc.ToString("yyyy-MM-dd") + " (UTC).\n\n" +
                     "Please install a newer release. Your databases have not been changed.",
-                    "Beta 2 expired", MessageBoxButtons.OK, MessageBoxIcon.Information,
+                    "Beta 3 expired", MessageBoxButtons.OK, MessageBoxIcon.Information,
                     MessageBoxDefaultButton.Button1, Common.MB_TOPMOST);
                 return;
             }

@@ -50,7 +50,7 @@ namespace Thetis
 {
     class TitleBar
     {
-        public const string BUILD_NAME = "PY2ECM Beta 2";
+        public const string BUILD_NAME = "PY2ECM Beta 3";
         public static readonly DateTime BetaExpirationUtc = new DateTime(2026, 12, 30, 0, 0, 0, DateTimeKind.Utc);
         public static string GetString(bool bWithFirmware = true)
         {
