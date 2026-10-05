@@ -399,6 +399,7 @@ FodyWeavers.xsd
 /release-assets/
 /neural-cw-test-data/
 /neural-cw-clone-data/
+/.tools/
 
 # Local PY2ECM development notes (not part of the public source or packages)
 /README-BETA1.md
