@@ -3,7 +3,7 @@
   <String Id="Language">1033</String>
   <!-- Supported language and codepage codes can be found here: http://www.tramontana.co.hu/wix/lesson2.php#2.4 -->
 
-  <String Id="ApplicationName">Thetis PY2ECM Beta 2</String>
+  <String Id="ApplicationName">Thetis PY2ECM Beta 3</String>
   <String Id="ManufacturerName">PY2ECM</String>
   <String Id="ManufacturerFullName">Doug Wigley, W5WC</String>
   <String Id="ProductDescription">Software Defined Radio</String>

@@ -9,8 +9,8 @@
 <?if $(var.Platform) = x64 ?>
 <?define Win64 = "yes" ?>
 <?define UpgradeCode = "B9AF576A-53F9-4B5E-8923-C61E71AE6134"?>
-<?define ProductName = "Thetis PY2ECM WDSP 2.10 Beta 2" ?>
-<?define ThetisName = "Thetis PY2ECM Beta 2"?>
+<?define ProductName = "Thetis PY2ECM WDSP 2.10 Beta 3" ?>
+<?define ThetisName = "Thetis PY2ECM Beta 3"?>
 <?define VC145 = "Microsoft_VC145_CRT_x64.msm" ?>
 <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
 <?define FilesPath = "..\..\Bin\$(var.Platform)\$(var.Configuration)\" ?>
@@ -63,6 +63,7 @@
 
     <Feature Id="ProductFeature" Title="Thetis" Level="1" ConfigurableDirectory="INSTALLFOLDER">
       <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="NeuralModelComponents" />
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
       <ComponentRef Id="DesktopShortcutHL2" />
@@ -119,7 +120,8 @@
 
       <Directory Id="$(var.PlatformProgramFilesFolder)">
         <Directory Id="HPSDRFolder" Name="OpenHPSDR">
-          <Directory Id="INSTALLFOLDER" Name="Thetis-PY2ECM-WDSP210-Beta2">
+          <Directory Id="INSTALLFOLDER" Name="Thetis-PY2ECM-WDSP210-Beta3">
+            <Directory Id="NEURALMODELFOLDER" Name="models" />
 		  </Directory>
         </Directory>
       </Directory>
@@ -142,7 +144,7 @@
       <Component Id="DesktopShortcut" Guid="9E5BFC06-E8F4-48BF-9235-37554F812A70">
         <Shortcut Id="ProgramDesktopShortcut"
                   Name="$(var.ThetisName)"
-                  Description="Run Thetis PY2ECM Beta 2 with the default database"
+                  Description="Run Thetis PY2ECM Beta 3 with the default database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   WorkingDirectory="INSTALLFOLDER" />
         <RegistryValue Root="HKLM" Key="Software\OpenHPSDR\$(var.ThetisName)"
@@ -151,7 +153,7 @@
       <Component Id="DesktopShortcutHL2" Guid="57AA8370-268F-414F-ADA8-F8F727C1B06C">
         <Shortcut Id="ProgramDesktopShortcutHL2"
                   Name="$(var.ThetisName)-HL2"
-                  Description="Run Thetis PY2ECM Beta 2 with the HL2 database"
+                  Description="Run Thetis PY2ECM Beta 3 with the HL2 database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   Arguments="-dbid:HL2"
                   WorkingDirectory="INSTALLFOLDER" />
@@ -165,13 +167,13 @@
               
         <Shortcut Id="ThetisShortcut"
                   Name="$(var.ThetisName)"
-                  Description="Run Thetis PY2ECM Beta 2 with the default database"
+                  Description="Run Thetis PY2ECM Beta 3 with the default database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   WorkingDirectory="INSTALLFOLDER"
                   />
         <Shortcut Id="ThetisShortcutHL2"
                   Name="$(var.ThetisName)-HL2"
-                  Description="Run Thetis PY2ECM Beta 2 with the HL2 database"
+                  Description="Run Thetis PY2ECM Beta 3 with the HL2 database"
                   Target="[INSTALLFOLDER]Thetis.exe"
                   Arguments="-dbid:HL2"
                   WorkingDirectory="INSTALLFOLDER"
@@ -808,6 +810,43 @@
 		<Component Guid="*">
 			<File Id="PY2ECMSourceLicense"
 				Source="..\..\..\LICENSE"
+				KeyPath="yes" />
+		</Component>
+		<Component Guid="*">
+			<File Id="NeuralCwFrontendDLL"
+				Source="$(var.FilesPath)Microsoft.ML.OnnxRuntime.dll"
+				KeyPath="yes" />
+		</Component>
+		<Component Guid="*">
+			<File Id="NeuralCwNativeDLL"
+				Source="$(var.FilesPath)onnxruntime.dll"
+				KeyPath="yes" />
+		</Component>
+		<Component Guid="*">
+			<File Id="NeuralCwNotice"
+				Source="$(var.FilesPath)THIRD-PARTY-NEURAL-CW.txt"
+				KeyPath="yes" />
+		</Component>
+		<Component Guid="*">
+			<File Id="NeuralCwOnnxLicense"
+				Source="$(var.FilesPath)ONNX-Runtime-LICENSE.txt"
+				KeyPath="yes" />
+		</Component>
+		<Component Guid="*">
+			<File Id="NeuralCwOnnxNotices"
+				Source="$(var.FilesPath)ONNX-Runtime-ThirdPartyNotices.txt"
+				KeyPath="yes" />
+		</Component>
+	</ComponentGroup>
+	<ComponentGroup Id="NeuralModelComponents" Directory="NEURALMODELFOLDER">
+		<Component Guid="*">
+			<File Id="NeuralCwModel"
+				Source="$(var.FilesPath)models\deepfist.onnx"
+				KeyPath="yes" />
+		</Component>
+		<Component Guid="*">
+			<File Id="NeuralCwModelTokens"
+				Source="$(var.FilesPath)models\deepfist.onnx.json"
 				KeyPath="yes" />
 		</Component>
 	</ComponentGroup>
