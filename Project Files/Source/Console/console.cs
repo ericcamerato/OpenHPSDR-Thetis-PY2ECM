@@ -27933,6 +27933,29 @@ namespace Thetis
             }
         }
         private bool DataFlowing = false;
+        private System.Windows.Forms.Timer hl2CwRxStartupRetuneTimer;
+
+        private void ResendHL2CwRxTuningAfterStart()
+        {
+            if (HardwareSpecific.Model != HPSDRModel.HERMESLITE ||
+                (RX1DSPMode != DSPMode.CWL && RX1DSPMode != DSPMode.CWU)) return;
+
+            if (hl2CwRxStartupRetuneTimer == null)
+            {
+                hl2CwRxStartupRetuneTimer = new System.Windows.Forms.Timer { Interval = 500 };
+                hl2CwRxStartupRetuneTimer.Tick += (sender, args) =>
+                {
+                    hl2CwRxStartupRetuneTimer.Stop();
+                    if (PowerOn && DataFlowing && !MOX &&
+                        HardwareSpecific.Model == HPSDRModel.HERMESLITE &&
+                        (RX1DSPMode == DSPMode.CWL || RX1DSPMode == DSPMode.CWU))
+                        UpdateRX1DDSFreq();
+                };
+            }
+
+            hl2CwRxStartupRetuneTimer.Stop();
+            hl2CwRxStartupRetuneTimer.Start();
+        }
         private byte[] id_bytes = new byte[1];
         private void chkPower_CheckedChanged(object sender, System.EventArgs e)
         {
@@ -28193,6 +28216,7 @@ namespace Thetis
                 if (radio.GetDSPRX(1, 0).Active) WDSP.SetChannelState(WDSP.id(2, 0), 1, 1);
 
                 DataFlowing = true;
+                ResendHL2CwRxTuningAfterStart();
                 SetupForm.UpdateGeneraHardware();
                 SetMicGain();
                 chkQSK_CheckStateChanged(this, EventArgs.Empty);
