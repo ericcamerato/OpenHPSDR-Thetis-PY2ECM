@@ -1603,13 +1603,13 @@ namespace Thetis
             label5.Visible = false;
             label6.Visible = false;
             label7.Visible = false;
-            neuralRxEnabled = new CheckBox { Text = "Neural CW RX (RX1)", Location = new Point(12, 185), AutoSize = true };
+            neuralRxEnabled = new CheckBox { Text = "Neural CW RX (RX1)", Location = new Point(chkPause.Left, 185), AutoSize = true };
             neuralRxStatus = new Label
             {
                 Text = "Off", Location = new Point(220, 183), Size = new Size(270, 22),
                 TextAlign = ContentAlignment.MiddleCenter
             };
-            neuralRxClear = new Button { Text = "Clear RX", Location = new Point(603, 183), Size = new Size(74, 22) };
+            neuralRxClear = new Button { Text = "Clear RX", Location = new Point(cbMorse.Right - 74, 183), Size = new Size(74, 22) };
             neuralRxText = new TextBox
             {
                 Location = new Point(12, 210), Size = new Size(665, 53), Multiline = true,
