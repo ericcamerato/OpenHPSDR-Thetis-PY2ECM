@@ -1,10 +1,18 @@
 # Thetis PY2ECM for Hermes Lite 2 / HL2+
 
-Thetis PY2ECM v2.10.3.16 Beta 2 is an experimental Windows x64 build based on the final [MI0BOT Thetis HL2 v2.10.3.15](https://github.com/mi0bot/OpenHPSDR-Thetis/releases/tag/v2.10.3.15), which is derived from Thetis/OpenHPSDR. This is a PY2ECM modification, **not** an official MI0BOT or upstream release.
+Thetis PY2ECM v2.10.3.16 Beta 3 is an experimental Windows x64 build based on the final [MI0BOT Thetis HL2 v2.10.3.15](https://github.com/mi0bot/OpenHPSDR-Thetis/releases/tag/v2.10.3.15), which is derived from Thetis/OpenHPSDR. This is a PY2ECM modification, **not** an official MI0BOT or upstream release.
 
-Download the [Beta 2 release](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta2) for the x64 MSI, portable ZIP, SHA-256 checksums, and source archives. [Beta 1](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta1) remains available for reference. The automatically generated source ZIP and TAR.GZ are source code, not installers.
+Download the [Beta 3 release](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta3) for the x64 MSI, portable ZIP, SHA-256 checksums, and source archives. [Beta 2](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta2) and [Beta 1](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta1) remain available for reference. The automatically generated source ZIP and TAR.GZ are source code, not installers.
 
-## Changes from MI0BOT v2.10.3.15
+## New in Beta 3
+
+- Added an optional, **receive-only neural CW decoder** in the CWX window for RX1 CWL/CWU. It displays copied text above the existing CW transmit area, with a Clear RX button; CW transmission is unchanged. Decoding pauses during TX.
+- Included the DeepFist ONNX model and required ONNX Runtime files in the MSI and portable ZIP. The CWX checkbox can also be enabled at launch with `-neuralcwrx`. The decoder runs on the CPU; it does not require a GPU.
+- Added a saved, adjustable keying-contrast gate (2.0–20.0, default 4.0). A lower gate can admit weak CW but may produce false characters in noise. The status line shows tone frequency and measured contrast. It waits for a complete six-second audio window so the initial contrast reading is not misleading.
+- Improved CW tone tracking and weak-signal handling after on-air testing, and corrected HL2 CW RX tuning on radio startup so reception is not left silent when starting in CWU. The fix was checked through repeated starts and mode/frequency changes.
+- Credited the DeepFist model author and ONNX Runtime in About and the included [third-party notice](Project%20Files/Source/Console/THIRD-PARTY-NEURAL-CW.txt).
+
+## Earlier PY2ECM changes (Beta 1 and Beta 2)
 
 - Updated the DSP library to WDSP 2.10 and added NR5 (NNR Standard) and NR6 (NNR Premium), with an NNR settings tab immediately to the right of NR/ANF in Setup > DSP. Right-clicking NR1–NR4 opens NR/ANF, NR5–NR6 opens NNR, and NB opens its own settings.
 - Added CAT and MIDI2CAT selection of NR5 and NR6. CAT commands `ZZNE` (RX1) and `ZZNF` (RX2) accept `0` for off or `1`–`6` for NR1–NR6. Existing MIDI mapping IDs remain unchanged.
@@ -18,7 +26,7 @@ Download the [Beta 2 release](https://github.com/ericcamerato/OpenHPSDR-Thetis-P
 - Added NR5 and NR6 to Appearance > Meters/Gadgets > Other Buttons, so they can be placed in a button box.
 - Added separate **Active Peak** and **Data Line** color/alpha controls for 3D Pan and 3D Panafall in Appearance > RX Display. Each is opt-in; unchecked controls inherit the ordinary panadapter setting, including when loading an older database.
 
-This beta is not intended to change bandstack, filters, or unrelated RX/TX behavior. Other hardware, audio devices, and profiles have not been fully tested.
+Other hardware, audio devices, and profiles have not been fully tested. Neural CW decoding is experimental and may miss characters or produce incorrect text, especially on weak or crowded signals.
 
 ## Installation and database choices
 
@@ -26,8 +34,8 @@ This release requires **Windows x64 and .NET Framework 4.8**. Close Thetis befor
 
 | Package | How to use it | Database |
 | --- | --- | --- |
-| x64 MSI | Install separately from MI0BOT's HL2 build. Use either the Desktop or Start Menu shortcut. This MSI upgrades the PY2ECM Beta 1 MSI if installed; it does not remove the Beta 1 GitHub release. | `Thetis PY2ECM Beta 2` uses the default database; `Thetis PY2ECM Beta 2-HL2` uses `-dbid:HL2`. |
-| Portable x64 ZIP | Extract to a new directory and run `startThetis-PY2ECM-Beta2.bat`. Keep its `Thetis.exe` and matching `wdsp.dll` together. | Uses the separate database ID `PY2ECM-WDSP210-BETA2`. |
+| x64 MSI | Install separately from MI0BOT's HL2 build. Use either the Desktop or Start Menu shortcut. It may upgrade an earlier PY2ECM MSI; back up first. | `Thetis PY2ECM Beta 3` uses the default database; `Thetis PY2ECM Beta 3-HL2` uses `-dbid:HL2`. |
+| Portable x64 ZIP | Extract to a new directory and run `START-THETIS-BETA3.bat`. Keep `Thetis.exe`, `wdsp.dll`, `onnxruntime.dll`, and the `models` folder together. | Uses the separate database ID `PY2ECM-BETA3-TEST`. |
 
 The installer does not migrate databases. Neither package contains personal databases, profiles, calibrations, or private scripts. If you use a customized launcher, inspect its executable path and `-dbid` argument before starting this build. Do not run two Thetis instances against the same radio or database.
 
@@ -38,13 +46,13 @@ The installer does not migrate databases. Neither package contains personal data
 3. NR6 may use more CPU and may produce vibrato or other audio artifacts on some signals. Try NR5 or NR4 if needed. Audio pops and latency also depend on FPS, ASIO driver, buffers, and system load.
 4. If Windows or antivirus software flags an unsigned file, verify its source and SHA-256 checksum rather than broadly disabling protection.
 
-**Beta 2 expires on 30 December 2026 (UTC).** It does not delete databases when it expires. Install a newer build before that date.
+**Beta 3 expires on 30 December 2026 (UTC).** It does not delete databases when it expires. Install a newer build before that date.
 
 ## Disclaimer and credits
 
 This is experimental software provided **without warranty of operation or fitness for any purpose**. Installation, use, and transmission are **at your own risk**. PY2ECM and previous contributors accept no responsibility for data loss, malfunction, equipment damage, interference, excessive power, or other losses. Back up and test carefully before using it as your primary station software.
 
-Original licenses and attribution notices remain in place: see [LICENSE](LICENSE), [LICENSE-DUAL-LICENSING](LICENSE-DUAL-LICENSING), [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), and source headers. Credits include FlexRadio Systems, Doug Wigley/W5WC, Richard Samphire/MW0LGE, Warren Pratt/NR0V, Reid Campbell/MI0BOT, Luis Antonio Villas Boas/PY5VB (HL2+ testing), and the other contributors to Thetis/OpenHPSDR and its libraries. PY2ECM identifies the modifications in this edition, not sole authorship of the project.
+Original licenses and attribution notices remain in place: see [LICENSE](LICENSE), [LICENSE-DUAL-LICENSING](LICENSE-DUAL-LICENSING), [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), the [neural CW notice](Project%20Files/Source/Console/THIRD-PARTY-NEURAL-CW.txt), and source headers. Credits include FlexRadio Systems, Doug Wigley/W5WC, Richard Samphire/MW0LGE, Warren Pratt/NR0V, Reid Campbell/MI0BOT, Luis Antonio Villas Boas/PY5VB (HL2+ testing), Brent Crier/N9BC (DeepFist model), Rick Langford/N8SDR (Lyra SDR and model distribution), Microsoft (ONNX Runtime), and the other contributors to Thetis/OpenHPSDR and its libraries. PY2ECM identifies the modifications in this edition, not sole authorship of the project.
 
 ## MI0BOT v2.10.3.15 baseline
 

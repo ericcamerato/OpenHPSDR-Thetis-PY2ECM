@@ -1,4 +1,4 @@
-Thetis PY2ECM v2.10.3.16 Beta 3 (x64) - local test build
+Thetis PY2ECM v2.10.3.16 Beta 3 (x64) - public beta
 Windows / .NET Framework 4.8
 Expires 2026-12-30 00:00 UTC
 
@@ -8,6 +8,11 @@ CWX includes a Neural CW RX checkbox, reception text and Clear RX button.
 The checkbox lines up with Pause; Clear RX lines up with the space dropdown.
 The tone and keying contrast are shown in the middle of the row.
 Weak-signal gating and tone tracking have been adjusted after on-air testing.
+The keying-contrast Gate is adjustable from 2.0 to 20.0 (default 4.0) and
+is saved with CWX settings. Lower values may produce false decodes in noise.
+The status waits for a complete six-second audio window before showing a
+keying-contrast reading. HL2 CW RX tuning is resent on radio startup to avoid
+silent reception when starting in CWU. Decoding uses the CPU, not the GPU.
 
 This build also includes the Beta 1 and Beta 2 PY2ECM features, including
 WDSP 2.10, NNR/NR5/NR6, additional PA Gain bands, per-mode DSP/AGC/ANF
