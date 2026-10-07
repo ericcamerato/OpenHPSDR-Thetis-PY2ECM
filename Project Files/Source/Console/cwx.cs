@@ -185,6 +185,7 @@ namespace Thetis
         private CheckBoxTS chkFocusRequired;
         private TextBox neuralRxText;
         private CheckBox neuralRxEnabled;
+        private System.Windows.Forms.NumericUpDownTS udNeuralKeyGate;
         private Label neuralRxStatus;
         private Button neuralRxClear;
         private System.Windows.Forms.Timer neuralRxTimer;
@@ -1604,9 +1605,20 @@ namespace Thetis
             label6.Visible = false;
             label7.Visible = false;
             neuralRxEnabled = new CheckBox { Text = "Neural CW RX (RX1)", Location = new Point(chkPause.Left, 185), AutoSize = true };
+            var neuralKeyGateLabel = new Label
+            {
+                Text = "Gate", Location = new Point(147, 186), Size = new Size(34, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            udNeuralKeyGate = new System.Windows.Forms.NumericUpDownTS
+            {
+                Name = "udNeuralKeyGate", Location = new Point(181, 183), Size = new Size(52, 22),
+                DecimalPlaces = 1, Increment = 0.5M, Minimum = 2.0M, Maximum = 20.0M,
+                Value = (decimal)NeuralCwDecoder.DefaultKeyingGate
+            };
             neuralRxStatus = new Label
             {
-                Text = "Off", Location = new Point(220, 183), Size = new Size(270, 22),
+                Text = "Off", Location = new Point(239, 183), Size = new Size(320, 22),
                 TextAlign = ContentAlignment.MiddleCenter
             };
             neuralRxClear = new Button { Text = "Clear RX", Location = new Point(cbMorse.Right - 74, 183), Size = new Size(74, 22) };
@@ -1618,9 +1630,15 @@ namespace Thetis
             };
             neuralRxClear.Click += (s, e) => neuralRxText.Clear();
             neuralRxEnabled.CheckedChanged += NeuralRxEnabledChanged;
+            udNeuralKeyGate.ValueChanged += (s, e) =>
+            {
+                if (neuralDecoder != null) neuralDecoder.KeyingGate = (double)udNeuralKeyGate.Value;
+            };
             neuralRxTimer = new System.Windows.Forms.Timer { Interval = 500 };
             neuralRxTimer.Tick += (s, e) => UpdateNeuralRxRun();
             Controls.Add(neuralRxEnabled);
+            Controls.Add(neuralKeyGateLabel);
+            Controls.Add(udNeuralKeyGate);
             Controls.Add(neuralRxStatus);
             Controls.Add(neuralRxClear);
             Controls.Add(neuralRxText);
@@ -1636,7 +1654,7 @@ namespace Thetis
             }
             try
             {
-                neuralDecoder = new NeuralCwDecoder(cmaster.GetChannelOutputRate(0, 0));
+                neuralDecoder = new NeuralCwDecoder(cmaster.GetChannelOutputRate(0, 0), (double)udNeuralKeyGate.Value);
                 neuralDecoder.TextReceived += AppendNeuralRx;
                 neuralDecoder.StatusChanged += SetNeuralRxStatus;
                 neuralDecoder.Start();
@@ -1665,10 +1683,12 @@ namespace Thetis
             cmaster.SetCwRxAudioRun(active ? 1 : 0);
             if (!active)
                 neuralRxStatus.Text = "Select CWL/CWU on RX1; TX pauses decoding";
+            else if (!neuralDecoder.HasFullWindow)
+                neuralRxStatus.Text = "Buffering RX audio (6 s)";
             else if (neuralDecoder.ToneHz > 0)
                 neuralRxStatus.Text = string.Format("{0} | {1:0} Hz | key {2:0.0}/{3:0}",
-                    neuralDecoder.KeyingRatio >= NeuralCwDecoder.MinimumKeyingRatio ? "Listening" : "Below gate",
-                    neuralDecoder.ToneHz, neuralDecoder.KeyingRatio, NeuralCwDecoder.MinimumKeyingRatio);
+                    neuralDecoder.KeyingRatio >= neuralDecoder.KeyingGate ? "Listening" : "Below gate",
+                    neuralDecoder.ToneHz, neuralDecoder.KeyingRatio, neuralDecoder.KeyingGate);
             else
                 neuralRxStatus.Text = "Listening | waiting for RX audio";
         }

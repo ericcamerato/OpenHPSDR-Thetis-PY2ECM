@@ -22,9 +22,8 @@ namespace Thetis
         private const int Bins = 65;
         private const int FirSize = 121;
         // Thetis post-DSP audio can have a lower keying ratio than Lyra's raw
-        // input: a clearly audible CW signal was measured at 10.5 and was
-        // previously rejected by the 12.0 gate before model inference.
-        internal const double MinimumKeyingRatio = 7.0;
+        // input. Keep this gate adjustable for weak but audible CW signals.
+        internal const double DefaultKeyingGate = 4.0;
         private static readonly string ModelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
         private readonly ConcurrentQueue<AudioBlock> pending = new ConcurrentQueue<AudioBlock>();
         private readonly AutoResetEvent wake = new AutoResetEvent(false);
@@ -47,6 +46,7 @@ namespace Thetis
         private volatile string fault;
         private double lastToneHz;
         private double lastKeyingRatio;
+        private double keyingGate;
 
         private struct AudioBlock
         {
@@ -58,14 +58,21 @@ namespace Thetis
         internal string Error { get { return fault; } }
         internal double ToneHz { get { return Volatile.Read(ref lastToneHz); } }
         internal double KeyingRatio { get { return Volatile.Read(ref lastKeyingRatio); } }
+        internal bool HasFullWindow { get { return Interlocked.Read(ref total) >= Window; } }
+        internal double KeyingGate
+        {
+            get { return Volatile.Read(ref keyingGate); }
+            set { Volatile.Write(ref keyingGate, value); }
+        }
         internal event Action<string> TextReceived;
         internal event Action<string> StatusChanged;
 
-        internal NeuralCwDecoder(int inputRate)
+        internal NeuralCwDecoder(int inputRate, double gate)
         {
             if (inputRate <= 0 || inputRate % Rate != 0)
                 throw new NotSupportedException("CW neural RX requires an audio rate divisible by 3200 Hz.");
             decimation = inputRate / Rate;
+            KeyingGate = gate;
             string model = Path.Combine(ModelDir, "deepfist.onnx");
             string sidecar = model + ".json";
             if (!File.Exists(model) || !File.Exists(sidecar))
@@ -138,7 +145,9 @@ namespace Thetis
                         try { Resample(block.Samples, block.Length); }
                         finally { ArrayPool<float>.Shared.Return(block.Samples); }
                     }
-                    if (total < Rate || total - lastInference < Rate * 4 / 10) continue;
+                    // A partly empty six-second ring gives an artificially huge
+                    // p90/p10 ratio at startup and can confuse the model.
+                    if (total < Window || total - lastInference < Rate * 4 / 10) continue;
                     lastInference = total;
                     Decode();
                 }
@@ -183,7 +192,7 @@ namespace Thetis
             float[] conditioned = Condition(audio, tone, out double ratio);
             Volatile.Write(ref lastToneHz, tone);
             Volatile.Write(ref lastKeyingRatio, ratio);
-            if (ratio < MinimumKeyingRatio)
+            if (ratio < KeyingGate)
             {
                 committed = Math.Max(committed, settleTo);
                 if (!idle) { idle = true; TextReceived?.Invoke(" "); }
