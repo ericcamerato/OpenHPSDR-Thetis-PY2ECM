@@ -50,8 +50,7 @@ namespace Thetis
 {
     class TitleBar
     {
-        public const string BUILD_NAME = "PY2ECM Beta 3";
-        public static readonly DateTime BetaExpirationUtc = new DateTime(2026, 12, 30, 0, 0, 0, DateTimeKind.Utc);
+        public const string BUILD_NAME = "PY2ECM WDSP 2.10";
         public static string GetString(bool bWithFirmware = true)
         {
             string sRevision = "." + Common.GetRevision();

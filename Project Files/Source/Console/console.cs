@@ -1485,16 +1485,6 @@ namespace Thetis
                 if (showHelpInfo()) return;  // if we can show, instantly exit
             }
 
-            if (DateTime.UtcNow >= TitleBar.BetaExpirationUtc)
-            {
-                MessageBox.Show(
-                    "Thetis PY2ECM Beta 3 expired on " + TitleBar.BetaExpirationUtc.ToString("yyyy-MM-dd") + " (UTC).\n\n" +
-                    "Please install a newer release. Your databases have not been changed.",
-                    "Beta 3 expired", MessageBoxButtons.OK, MessageBoxIcon.Information,
-                    MessageBoxDefaultButton.Button1, Common.MB_TOPMOST);
-                return;
-            }
-
             //[2.10.3.12]MW0LGE command line adaptor select
             if (Common.HasArg(args, "-adaptor"))
             {
