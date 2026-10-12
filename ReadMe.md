@@ -1,10 +1,10 @@
 # Thetis PY2ECM for Hermes Lite 2 / HL2+
 
-Thetis PY2ECM v2.10.3.16 Beta 3 is an experimental Windows x64 build based on the final [MI0BOT Thetis HL2 v2.10.3.15](https://github.com/mi0bot/OpenHPSDR-Thetis/releases/tag/v2.10.3.15), which is derived from Thetis/OpenHPSDR. This is a PY2ECM modification, **not** an official MI0BOT or upstream release.
+Thetis PY2ECM WDSP 2.10 v2.10.3.16 Final is a Windows x64 release based on the final [MI0BOT Thetis HL2 v2.10.3.15](https://github.com/mi0bot/OpenHPSDR-Thetis/releases/tag/v2.10.3.15), which is derived from Thetis/OpenHPSDR. This is a PY2ECM modification, **not** an official MI0BOT or upstream release.
 
-Download the [Beta 3 release](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta3) for the x64 MSI, portable ZIP, SHA-256 checksums, and source archives. [Beta 2](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta2) and [Beta 1](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta1) remain available for reference. The automatically generated source ZIP and TAR.GZ are source code, not installers.
+Download the [Final release](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16) for the x64 MSI, portable ZIP, SHA-256 checksums, and source archives. The [Beta 3 release](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta3) remains available for reference. [Beta 2](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta2) and [Beta 1](https://github.com/ericcamerato/OpenHPSDR-Thetis-PY2ECM/releases/tag/py2ecm-v2.10.3.16-beta1) remain available for reference. The automatically generated source ZIP and TAR.GZ are source code, not installers.
 
-## New in Beta 3
+## Added in Beta 3 (included in Final)
 
 - Added an optional, **receive-only neural CW decoder** in the CWX window for RX1 CWL/CWU. It displays copied text above the existing CW transmit area, with a Clear RX button; CW transmission is unchanged. Decoding pauses during TX.
 - Included the DeepFist ONNX model and required ONNX Runtime files in the MSI and portable ZIP. The CWX checkbox can also be enabled at launch with `-neuralcwrx`. The decoder runs on the CPU; it does not require a GPU.
@@ -34,8 +34,8 @@ This release requires **Windows x64 and .NET Framework 4.8**. Close Thetis befor
 
 | Package | How to use it | Database |
 | --- | --- | --- |
-| x64 MSI | Install separately from MI0BOT's HL2 build. Use either the Desktop or Start Menu shortcut. It may upgrade an earlier PY2ECM MSI; back up first. | `Thetis PY2ECM Beta 3` uses the default database; `Thetis PY2ECM Beta 3-HL2` uses `-dbid:HL2`. |
-| Portable x64 ZIP | Extract to a new directory and run `START-THETIS-BETA3.bat`. Keep `Thetis.exe`, `wdsp.dll`, `onnxruntime.dll`, and the `models` folder together. | Uses the separate database ID `PY2ECM-BETA3-TEST`. |
+| x64 MSI | Install separately from MI0BOT's HL2 build. Use either the Desktop or Start Menu shortcut. It may upgrade an earlier PY2ECM MSI; back up first. | `Thetis PY2ECM WDSP 2.10` uses the default database; `Thetis PY2ECM WDSP 2.10-HL2` uses `-dbid:HL2`. |
+| Portable x64 ZIP | Extract to a new directory and run `START-THETIS-WDSP210.bat`. Keep `Thetis.exe`, `wdsp.dll`, `onnxruntime.dll`, and the `models` folder together. | Uses the separate database ID `PY2ECM-WDSP210`. |
 
 The installer does not migrate databases. Neither package contains personal databases, profiles, calibrations, or private scripts. If you use a customized launcher, inspect its executable path and `-dbid` argument before starting this build. Do not run two Thetis instances against the same radio or database.
 
@@ -46,7 +46,7 @@ The installer does not migrate databases. Neither package contains personal data
 3. NR6 may use more CPU and may produce vibrato or other audio artifacts on some signals. Try NR5 or NR4 if needed. Audio pops and latency also depend on FPS, ASIO driver, buffers, and system load.
 4. If Windows or antivirus software flags an unsigned file, verify its source and SHA-256 checksum rather than broadly disabling protection.
 
-**Beta 3 expires on 30 December 2026 (UTC).** It does not delete databases when it expires. Install a newer build before that date.
+This Final release has no time-based expiration.
 
 ## Disclaimer and credits
 

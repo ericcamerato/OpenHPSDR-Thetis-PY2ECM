@@ -6,7 +6,7 @@
     <ProductVersion>3.5</ProductVersion>
     <ProjectGuid>{B3FB4FDC-D517-4C56-872D-9E86627B5A53}</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
-    <OutputName>Thetis-PY2ECM-Beta3</OutputName>
+    <OutputName>Thetis-PY2ECM-WDSP210</OutputName>
     <OutputType>Package</OutputType>
     <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' AND '$(MSBuildExtensionsPath32)' != '' ">$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
     <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
@@ -102,6 +102,6 @@
       <Pattern>^(\d+\.\d+\.\d+\.\d+)</Pattern>
       <AssemblyVersion>$([System.Text.RegularExpressions.Regex]::Match($(In), $(Pattern)))</AssemblyVersion>
     </PropertyGroup>
-    <Move SourceFiles="..\..\bin\Installers\$(OutputName).msi" DestinationFiles="..\..\bin\Installers\Thetis-PY2ECM-v$(AssemblyVersion)-beta3-$(Platform).msi" />
+    <Move SourceFiles="..\..\bin\Installers\$(OutputName).msi" DestinationFiles="..\..\bin\Installers\Thetis-PY2ECM-v$(AssemblyVersion)-WDSP210-$(Platform).msi" />
   </Target>
 </Project>
