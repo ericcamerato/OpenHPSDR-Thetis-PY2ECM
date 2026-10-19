@@ -5065,7 +5065,7 @@ namespace Thetis
         private static float _ema_oip5;
         //
 
-        private static void DrawPanafall3DHistory(int verticalShift, int width, int height,
+        private static bool DrawPanafall3DHistory(int verticalShift, int width, int height,
             int sampleCount, float[] data, float offset, int gridMax, int gridMin,
             long leftEdge, long rightEdge, bool freshFrame,
             SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
@@ -5076,7 +5076,7 @@ namespace Thetis
                 m_bDX2_3DFarBrush == null || m_bDX2_3DYellowBrush == null ||
                 m_bDX2_3DPeakBrush == null ||
                 m_bDX2_3DTxBrush == null)
-                return;
+                return false;
 
             if ((panafall3DLastTx.HasValue && panafall3DLastTx.Value != transmitting) ||
                 panafall3DWidth != width || panafall3DHeight != height ||
@@ -5117,9 +5117,46 @@ namespace Thetis
                     panafall3DCount++;
             }
 
-            if (!Draw3DHistoryGpu(verticalShift, width, height, gridMax, gridMin, transmitting))
+            bool gpuRendered = Draw3DHistoryGpu(verticalShift, width, height,
+                gridMax, gridMin, transmitting);
+            if (!gpuRendered)
                 Draw3DStackedHistory(verticalShift, width, height,
                     gridMax, gridMin, fillBrush, transmitting);
+            return gpuRendered;
+        }
+
+        // Draw just the near ridge after the ordinary 2D trace. This makes the
+        // leading edge legible without repainting the 3D curtains over labels.
+        private static void Draw3DFrontRidge(int verticalShift, int width, int height,
+            int gridMax, int gridMin, SharpDX.Direct2D1.Brush lineBrush)
+        {
+            if (panafall3DHead < 0 || lineBrush == null) return;
+            float dbRange = Math.Max(1f, gridMax - gridMin);
+            float floor = gridMin - threeDFloor;
+            float ridgeHeight = Math.Min(0.70f, 0.46f * threeDGain / 70f);
+            using (var geometry = new SharpDX.Direct2D1.PathGeometry(_d2dRenderTarget.Factory))
+            using (var sink = geometry.Open())
+            {
+                for (int sample = 0; sample < Panafall3DSamples; sample++)
+                {
+                    float dbm = panafall3DHistory[panafall3DHead, sample];
+                    float strength = Math.Max(0f, Math.Min(1f, (dbm - floor) / dbRange));
+                    float y = Math.Max(0.02f,
+                        1f - (float)Math.Pow(strength, 0.72f) * ridgeHeight);
+                    var point = new SharpDX.Mathematics.Interop.RawVector2(
+                        sample * (width - 1f) / (Panafall3DSamples - 1),
+                        verticalShift + y * height);
+                    if (sample == 0)
+                        sink.BeginFigure(point, SharpDX.Direct2D1.FigureBegin.Hollow);
+                    else
+                        sink.AddLine(point);
+                }
+                sink.EndFigure(SharpDX.Direct2D1.FigureEnd.Open);
+                sink.Close();
+                using (var shadow = getDXBrushForColour(Color.FromArgb(160, 0, 0, 0)))
+                    _d2dRenderTarget.DrawGeometry(geometry, shadow, 2.8f);
+                _d2dRenderTarget.DrawGeometry(geometry, lineBrush, 1.4f);
+            }
         }
 
         private static Color[] Build3DPalette(int gridMin, int gridMax, bool transmitting)
@@ -5177,6 +5214,10 @@ namespace Thetis
                 int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
                 Color line = transmitting ? tx_data_line_color :
                     (dataLine3DColors[mode] ?? data_line_color);
+                bool gradientLine = transmitting ?
+                    m_bUseLinearGradientTX && m_bUseLinearGradientForDataLineTX :
+                    dataLine3DColors[mode] == null && m_bUseLinearGradient &&
+                    m_bUseLinearGradientForDataLine;
                 Color[] palette = Build3DPalette(gridMin, gridMax, transmitting);
                 float opacity = (transmitting ? data_fill_color_tx.A : data_fill_color.A) / 255f;
                 // D2D and D3D share the same device. Finish pending 2D commands before
@@ -5186,7 +5227,7 @@ namespace Thetis
                     panafall3DHistory, panafall3DHead, panafall3DCount, palette,
                     gridMin - threeDFloor, Math.Max(1f, gridMax - gridMin),
                     gridMin, gridMax, threeDGain, threeDSpan,
-                    Math.Max(0.15f, opacity), line);
+                    opacity, line, gradientLine);
                 _d2dRenderTarget.DrawBitmap(panafall3DGpu.Bitmap,
                     new SharpDX.RectangleF(0, verticalShift, width, height),
                     1f, BitmapInterpolationMode.Linear);
@@ -5604,9 +5645,10 @@ namespace Thetis
                       (current_display_mode == DisplayMode.PANADAPTER ||
                        current_display_mode == DisplayMode.PANAFALL)) ||
                      (rx == 2 && txOnRX2 && local_mox));
+                bool gpu3DRendered = false;
                 if (draw3D)
                 {
-                    DrawPanafall3DHistory(nVerticalShift, W, H, nDecimatedWidth,
+                    gpu3DRendered = DrawPanafall3DHistory(nVerticalShift, W, H, nDecimatedWidth,
                         data, fOffset, grid_max, grid_min, left_edge, right_edge,
                         fresh3DFrame, fillBrush, local_mox);
                 }
@@ -5756,6 +5798,9 @@ namespace Thetis
                     _d2dRenderTarget.DrawLine(previousPoint, point, lineBrush, line_width);
                     previousPoint = point;
                 }
+
+                if (gpu3DRendered)
+                    Draw3DFrontRidge(nVerticalShift, W, H, grid_max, grid_min, lineBrush);
 
                 //noise floor
                 if (!local_mox)

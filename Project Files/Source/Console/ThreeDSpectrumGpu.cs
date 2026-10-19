@@ -63,7 +63,8 @@ Varying vertexAt(uint column, float edge)
     float y = edge > 0.5 ? 1.0 : max(0.02, baseline - height);
     o.position = float4(x * 2.0 - 1.0, 1.0 - y * 2.0, 0.0, 1.0);
     float colour = saturate((dbm - levels.z) / max(levels.w, 1.0));
-    o.lut = edge > 0.5 ? colour * 0.6 : colour;
+    // The lower curtain edge uses the panadapter's actual floor colour.
+    o.lut = edge > 0.5 ? saturate((levels.x - levels.z) / max(levels.w, 1.0)) : colour;
     o.depth = depth;
     o.edge = edge;
     return o;
@@ -83,7 +84,7 @@ float4 fillPixel(Varying v) : SV_TARGET
 {
     int index = (int)round(saturate(v.lut) * 255.0);
     float3 rgb = Palette.Load(int3(index, 0, 0)).rgb;
-    rgb *= lerp(1.0, 0.57, v.depth);
+    rgb *= lerp(1.0, 0.88, v.depth);
     float alpha = row.z * lerp(1.0, 0.70, v.depth);
     return float4(rgb * alpha, alpha);
 }
@@ -91,7 +92,9 @@ float4 fillPixel(Varying v) : SV_TARGET
 float4 ridgePixel(Varying v) : SV_TARGET
 {
     float alpha = row.w * lerp(1.0, 0.24, v.depth);
-    return float4(outline.rgb * alpha, alpha);
+    int index = (int)round(saturate(v.lut) * 255.0);
+    float3 lineColour = outline.w > 0.5 ? Palette.Load(int3(index, 0, 0)).rgb : outline.rgb;
+    return float4(lineColour * alpha, alpha);
 }";
 
         [StructLayout(LayoutKind.Sequential)]
@@ -286,7 +289,7 @@ float4 ridgePixel(Varying v) : SV_TARGET
         public void Render(SharpDX.Direct2D1.RenderTarget target, int width, int height,
             float[,] history, int head, int count, Color[] palette,
             float floorDbm, float heightRangeDb, float gridMin, float gridMax,
-            int gain, int span, float fillOpacity, Color lineColor)
+            int gain, int span, float fillOpacity, Color lineColor, bool gradientLine)
         {
             if (count == 0 || width < 2 || height < 2) return;
             EnsureOutput(target, width, height);
@@ -313,9 +316,9 @@ float4 ridgePixel(Varying v) : SV_TARGET
                     Math.Max(1f, gridMax - gridMin)),
                 Shape = new Vector4(backWidth, 0.58f, ridgeHeight, 0.72f),
                 Outline = new Vector4(lineColor.R / 255f, lineColor.G / 255f,
-                    lineColor.B / 255f, 1f)
+                    lineColor.B / 255f, gradientLine ? 1f : 0f)
             };
-            float lineOpacity = Math.Max(0.22f, lineColor.A / 255f);
+            float lineOpacity = lineColor.A / 255f;
             for (int age = Math.Min(count, rows) - 1; age >= 0; age--)
             {
                 frame.Row = new Vector4(age, columns, fillOpacity, lineOpacity);
