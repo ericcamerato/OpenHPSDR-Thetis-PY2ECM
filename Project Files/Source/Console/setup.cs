@@ -109,6 +109,9 @@ namespace Thetis
         private readonly CheckBoxTS[,] chk3DColorOverride = new CheckBoxTS[2, 2];
         private readonly ColorButton[,] clrbtn3DColor = new ColorButton[2, 2];
         private readonly TrackBarTS[,] tb3DColorAlpha = new TrackBarTS[2, 2];
+        private NumericUpDownTS nud3DFloor;
+        private NumericUpDownTS nud3DGain;
+        private NumericUpDownTS nud3DSpan;
 
         #endregion
 
@@ -133,6 +136,7 @@ namespace Thetis
             this.Owner = c;
 
             Initialize3DDisplayColorControls();
+            Initialize3DViewControls();
             InitializeNNRControls();
 
             _frmBandwidth = new frmBandwidth();
@@ -217,6 +221,112 @@ namespace Thetis
                     Color.FromArgb(tb3DColorAlpha[mode, 1].Value, clrbtn3DColor[mode, 1].Color) : (Color?)null;
                 Display.Set3DDisplayColors(mode, peak, line);
             }
+        }
+
+        private void Initialize3DViewControls()
+        {
+            TabPage page = new TabPage
+            {
+                Name = "tpAppearance3DView",
+                Text = "3D View",
+                BackColor = SystemColors.Control
+            };
+            tcAppearance.TabPages.Insert(tcAppearance.TabPages.IndexOf(tpAppearanceDisplay) + 1, page);
+
+            LabelTS description = new LabelTS
+            {
+                Name = "lbl3DViewDescription",
+                Text = "Terrain controls for both 3D Pan and 3D Panafall. Changes apply live.",
+                Location = new Point(20, 18),
+                Size = new Size(650, 22)
+            };
+            page.Controls.Add(description);
+
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = "grp3DViewTerrain",
+                Text = "Spectrum terrain",
+                Location = new Point(18, 52),
+                Size = new Size(680, 252)
+            };
+            page.Controls.Add(group);
+
+            nud3DFloor = Create3DViewSetting(group, "nud3DFloor", "Floor", 6, 24, 28,
+                "dB below the measured noise floor. Moves the receding floor without raising the signal threshold.");
+            nud3DGain = Create3DViewSetting(group, "nud3DGain", "Gain", 70, 100, 96,
+                "Vertical height of the spectrum ridges, independent of the 2D panadapter scale.");
+            nud3DSpan = Create3DViewSetting(group, "nud3DSpan", "Span", 100, 100, 164,
+                "Width of the distant spectrum. 100 fills the plot; lower values increase perspective.");
+
+            ButtonTS reset = new ButtonTS
+            {
+                Name = "btn3DViewDefaults",
+                Text = "Restore 3D defaults",
+                Location = new Point(22, 211),
+                Size = new Size(150, 27)
+            };
+            reset.Click += delegate
+            {
+                nud3DFloor.Value = 6;
+                nud3DGain.Value = 70;
+                nud3DSpan.Value = 100;
+            };
+            group.Controls.Add(reset);
+        }
+
+        private NumericUpDownTS Create3DViewSetting(GroupBoxTS group, string name,
+            string labelText, decimal defaultValue, decimal maximum, int top, string tip)
+        {
+            LabelTS label = new LabelTS
+            {
+                Name = "lbl" + name.Substring(3),
+                Text = labelText,
+                Location = new Point(22, top + 4),
+                Size = new Size(140, 20)
+            };
+            NumericUpDownTS numeric = new NumericUpDownTS
+            {
+                Name = name,
+                Minimum = 0,
+                Maximum = maximum,
+                Value = defaultValue,
+                Location = new Point(176, top),
+                Size = new Size(78, 22)
+            };
+            LabelTS unit = new LabelTS
+            {
+                Name = "lbl" + name.Substring(3) + "Unit",
+                Text = labelText == "Floor" ? "dB" : "%",
+                Location = new Point(264, top + 4),
+                Size = new Size(40, 20)
+            };
+            LabelTS explanation = new LabelTS
+            {
+                Name = "lbl" + name.Substring(3) + "Explanation",
+                Text = tip,
+                Location = new Point(310, top + 4),
+                Size = new Size(350, 38)
+            };
+            numeric.ValueChanged += ThreeDViewSetting_Changed;
+            toolTip1.SetToolTip(label, tip);
+            toolTip1.SetToolTip(numeric, tip);
+            group.Controls.Add(label);
+            group.Controls.Add(numeric);
+            group.Controls.Add(unit);
+            group.Controls.Add(explanation);
+            return numeric;
+        }
+
+        private void ThreeDViewSetting_Changed(object sender, EventArgs e)
+        {
+            if (!initializing && !_gettingOptions) Apply3DViewSettings();
+        }
+
+        private void Apply3DViewSettings()
+        {
+            Display.ThreeDFloor = (int)nud3DFloor.Value;
+            Display.ThreeDGain = (int)nud3DGain.Value;
+            Display.ThreeDSpan = (int)nud3DSpan.Value;
         }
 
         private void InitializeNNRControls()
@@ -2013,10 +2123,15 @@ namespace Thetis
             // Older databases do not contain these opt-in settings. Switching to one
             // must not retain custom 3D colors from a previously loaded database.
             if (recoveryList == null)
+            {
                 for (int mode = 0; mode < 2; mode++)
                     for (int field = 0; field < 2; field++)
                         if (!a.ContainsKey(chk3DColorOverride[mode, field].Name))
                             chk3DColorOverride[mode, field].Checked = false;
+                if (!a.ContainsKey(nud3DFloor.Name)) nud3DFloor.Value = 6;
+                if (!a.ContainsKey(nud3DGain.Name)) nud3DGain.Value = 70;
+                if (!a.ContainsKey(nud3DSpan.Name)) nud3DSpan.Value = 100;
+            }
 
             List<string> sortedList = a.Keys.ToList();
             sortedList.Sort();
@@ -2025,7 +2140,11 @@ namespace Thetis
             //those controls will never be saved to the database, so when we recover, the count will be less than the number of controls as
             //this is checked before tabs are removed. A complete recovery is then done, which resets everything to default every
             //single time. TODO !!!!
-            if (a.Count < controls.Count)		// some control values are not in the database
+            int new3DSettingsMissing = 0;
+            if (!a.ContainsKey(nud3DFloor.Name)) new3DSettingsMissing++;
+            if (!a.ContainsKey(nud3DGain.Name)) new3DSettingsMissing++;
+            if (!a.ContainsKey(nud3DSpan.Name)) new3DSettingsMissing++;
+            if (a.Count < controls.Count - new3DSettingsMissing)		// some established control values are not in the database
             {								    // so set all of them to the defaults
                 InitGeneralTab(recoveryList);
                 InitAudioTab(recoveryList);
@@ -2334,6 +2453,7 @@ namespace Thetis
 
             _gettingOptions = false;
             Apply3DDisplayColors();
+            Apply3DViewSettings();
         }
 
         private string KeyToString(Keys k)

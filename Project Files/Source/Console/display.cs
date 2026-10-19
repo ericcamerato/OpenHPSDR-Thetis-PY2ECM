@@ -1639,8 +1639,9 @@ namespace Thetis
         }
 
         private static DisplayMode current_display_mode = DisplayMode.PANAFALL;
-        private const int Panafall3DRows = 20;
+        private const int Panafall3DRows = 32;
         private const int Panafall3DSamples = 2048;
+        private const int Panafall3DFrameStride = 3;
         private static readonly float[,] panafall3DHistory = new float[Panafall3DRows, Panafall3DSamples];
         private static readonly float[] panafall3DBaseline = new float[Panafall3DRows];
         private static int panafall3DHead = -1;
@@ -1652,6 +1653,26 @@ namespace Thetis
         private static long panafall3DRightEdge;
         private static bool panafall3DEnabled;
         private static bool? panafall3DLastTx;
+        private static int panafall3DFrameCounter;
+        private static int threeDFloor = 6;
+        private static int threeDGain = 70;
+        private static int threeDSpan = 100;
+
+        public static int ThreeDFloor
+        {
+            get { return threeDFloor; }
+            set { threeDFloor = Math.Max(0, Math.Min(24, value)); }
+        }
+        public static int ThreeDGain
+        {
+            get { return threeDGain; }
+            set { threeDGain = Math.Max(0, Math.Min(100, value)); }
+        }
+        public static int ThreeDSpan
+        {
+            get { return threeDSpan; }
+            set { threeDSpan = Math.Max(0, Math.Min(100, value)); }
+        }
 
         public static bool Panafall3DEnabled
         {
@@ -1669,6 +1690,7 @@ namespace Thetis
             panafall3DHead = -1;
             panafall3DCount = 0;
             panafall3DLastTx = null;
+            panafall3DFrameCounter = 0;
         }
         public static DisplayMode CurrentDisplayMode
         {
@@ -5062,7 +5084,8 @@ namespace Thetis
             }
             panafall3DLastTx = transmitting;
 
-            if (freshFrame)
+            if (freshFrame && (panafall3DCount == 0 ||
+                ++panafall3DFrameCounter % Panafall3DFrameStride == 0))
             {
                 panafall3DHead = (panafall3DHead + 1) % Panafall3DRows;
                 float[] sortedLevels = new float[Panafall3DSamples];
@@ -5111,15 +5134,17 @@ namespace Thetis
 
                 int row = (panafall3DHead - age + Panafall3DRows) % Panafall3DRows;
                 float depth = age / (float)Math.Max(1, Panafall3DRows - 1);
-                float horizontalScale = 1f - 0.11f * depth;
-                float floorDbm = panafall3DBaseline[row];
+                float farNarrowing = 0.50f - 0.39f * threeDSpan / 100f;
+                float horizontalScale = 1f - farNarrowing * depth;
+                float floorDbm = panafall3DBaseline[row] - threeDFloor;
                 // Both the surface and the live 2D trace use the same dB scale.
                 // Moving the panadapter level therefore moves the 3D terrain too.
                 float floorY = Math.Max(verticalShift + height * 0.12f,
                     Math.Min(verticalShift + height * 0.98f,
                         verticalShift + height * (gridMax - floorDbm) / dbRange -
-                        depth * height * 0.34f));
-                float reliefPerDb = height * 1.2f / dbRange;
+                        depth * height * 0.40f));
+                float reliefPerDb = height * (0.20f + 1.40f * threeDGain / 100f) / dbRange;
+                float signalBaseY = floorY - threeDFloor * reliefPerDb;
                 SharpDX.Direct2D1.Brush ridgeBrush = dataLine3DBrushes[mode] ??
                     (transmitting ? m_bDX2_tx_data_line_pen_brush :
                         m_bDX2_data_line_pen_brush);
@@ -5134,6 +5159,16 @@ namespace Thetis
                             panafall3DHistory[row, sample] - floorDbm) * reliefPerDb);
                     ridge[sample] = new SharpDX.Mathematics.Interop.RawVector2(x, y);
                 }
+
+                // The subdued receding floor gives the terrain depth without
+                // covering the individually coloured signal columns.
+                float floorOpacity = m_bDX2_3DNearBrush.Opacity;
+                m_bDX2_3DNearBrush.Opacity = floorOpacity * (0.09f + 0.10f * (1f - depth));
+                _d2dRenderTarget.DrawLine(
+                    new SharpDX.Vector2(ridge[0].X, floorY),
+                    new SharpDX.Vector2(ridge[Panafall3DSamples - 1].X, floorY),
+                    m_bDX2_3DNearBrush, 0.7f);
+                m_bDX2_3DNearBrush.Opacity = floorOpacity;
 
                 if (ridgeBrush != null)
                 {
@@ -5151,15 +5186,15 @@ namespace Thetis
                 }
 
                 float bandOpacity = 0.40f + 0.55f * (1f - depth);
-                Draw3DSignalBand(row, ridge, floorY, reliefPerDb, 4f, 10f,
+                Draw3DSignalBand(row, ridge, signalBaseY, reliefPerDb, 4f, 10f,
                     transmitting ? m_bDX2_3DTxBrush : m_bDX2_3DNearBrush, bandOpacity);
-                Draw3DSignalBand(row, ridge, floorY, reliefPerDb, 10f, 17f,
+                Draw3DSignalBand(row, ridge, signalBaseY, reliefPerDb, 10f, 17f,
                     transmitting ? m_bDX2_3DTxBrush : m_bDX2_3DMidBrush, bandOpacity);
-                Draw3DSignalBand(row, ridge, floorY, reliefPerDb, 17f, 24f,
+                Draw3DSignalBand(row, ridge, signalBaseY, reliefPerDb, 17f, 24f,
                     transmitting ? m_bDX2_3DTxBrush : m_bDX2_3DFarBrush, bandOpacity);
-                Draw3DSignalBand(row, ridge, floorY, reliefPerDb, 24f, 32f,
+                Draw3DSignalBand(row, ridge, signalBaseY, reliefPerDb, 24f, 32f,
                     transmitting ? m_bDX2_3DTxBrush : m_bDX2_3DYellowBrush, bandOpacity);
-                Draw3DSignalBand(row, ridge, floorY, reliefPerDb, 32f, float.MaxValue,
+                Draw3DSignalBand(row, ridge, signalBaseY, reliefPerDb, 32f, float.MaxValue,
                     transmitting ? m_bDX2_3DTxBrush : terrainPeakBrush, bandOpacity);
             }
         }
