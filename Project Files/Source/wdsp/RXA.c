@@ -25,6 +25,7 @@ warren@wpratt.com
 */
 
 #include "comm.h"
+#include "profile.h"
 
 struct _rxa rxa[MAX_CHANNELS];
 
@@ -660,6 +661,7 @@ void flush_rxa (int channel)
 
 void xrxa (int channel)
 {
+	LONGLONG profile_start = wdsp_profile_now();
 	xshift (rxa[channel].shift.p);
 	xHBResampler(rxa[channel].rsmpin.p);
 	xgen (rxa[channel].gen0.p);
@@ -668,12 +670,16 @@ void xrxa (int channel)
 	xnbp (rxa[channel].nbp0.p, 0);
 	xmeter (rxa[channel].smeter.p);
 	xsender (rxa[channel].sender.p);
+	wdsp_profile_add(channel, WDSP_PROFILE_RX_FRONTEND, profile_start);
+	profile_start = wdsp_profile_now();
 	xamsqcap (rxa[channel].amsq.p);
 	xbpsnbaout (rxa[channel].bpsnba.p, 0);
 	xamd (rxa[channel].amd.p);
 	xwbfm(rxa[channel].wbfm.p);
 	xfmd (rxa[channel].fmd.p);
 	xfmsq (rxa[channel].fmsq.p);
+	wdsp_profile_add(channel, WDSP_PROFILE_RX_DEMOD, profile_start);
+	profile_start = wdsp_profile_now();
 	xbpsnbain (rxa[channel].bpsnba.p, 1);
 	xbpsnbaout (rxa[channel].bpsnba.p, 1);
 	xsnba (rxa[channel].snba.p);
@@ -684,9 +690,13 @@ void xrxa (int channel)
 	xnnr (rxa[channel].nnr.p, 0);
 	xrnnr (rxa[channel].rnnr.p, 0);
 	xsbnr (rxa[channel].sbnr.p, 0);
+	wdsp_profile_add(channel, WDSP_PROFILE_RX_NOISE, profile_start);
+	profile_start = wdsp_profile_now();
 	xbandpass (rxa[channel].bp1.p, 0);
 	xcbl (rxa[channel].cbl.p, 0);
 	xwcpagc (rxa[channel].agc.p);
+	wdsp_profile_add(channel, WDSP_PROFILE_RX_FILTER_AGC, profile_start);
+	profile_start = wdsp_profile_now();
 	xanf (rxa[channel].anf.p, 1);
 	xanr (rxa[channel].anr.p, 1);
 	xemnr (rxa[channel].emnr.p, 1);
@@ -706,6 +716,7 @@ void xrxa (int channel)
 	xpanel (rxa[channel].panel.p);
 	xamsq (rxa[channel].amsq.p);
 	xresample (rxa[channel].rsmpout.p);
+	wdsp_profile_add(channel, WDSP_PROFILE_RX_POST, profile_start);
 }
 
 void setInputSamplerate_rxa (int channel)

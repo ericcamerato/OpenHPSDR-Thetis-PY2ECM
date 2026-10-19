@@ -277,6 +277,7 @@
     <ClInclude Include="varsamp.h" />
     <ClInclude Include="wcpAGC.h" />
     <ClInclude Include="wbfm.h" />
+    <ClInclude Include="profile.h" />
     <ClInclude Include="wdsp.h" />
     <ClInclude Include="zetaHat.h" />
   </ItemGroup>
@@ -323,6 +324,7 @@
     <ClCompile Include="fmmod.c" />
     <ClCompile Include="iobuffs.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="profile.c" />
     <ClCompile Include="meter.c" />
     <ClCompile Include="nbp.c" />
     <ClCompile Include="nnet.c" />

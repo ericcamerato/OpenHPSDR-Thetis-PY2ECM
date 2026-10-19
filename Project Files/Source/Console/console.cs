@@ -24423,6 +24423,7 @@ namespace Thetis
         unsafe private void RunDisplay()
         {            
             m_bDisplayLoopRunning = true;
+            WdspRuntimeProfiler wdspProfiler = WdspRuntimeProfiler.StartIfRequested();
 
             try
             {
@@ -24839,6 +24840,10 @@ namespace Thetis
             catch (Exception e)
             {
                 Common.LogException(e);
+            }
+            finally
+            {
+                if (wdspProfiler != null) wdspProfiler.Dispose();
             }
 
             m_bDisplayLoopRunning = false;

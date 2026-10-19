@@ -27,6 +27,7 @@ warren@wpratt.com
 */
 
 #include "comm.h"
+#include "profile.h"
 
 DP pdisp[dMAX_DISPLAYS];
 
@@ -616,6 +617,9 @@ DWORD WINAPI spectra (void *pargs)
 	int ss = (((int)(uintptr_t)pargs) >> 4) & 255;
 	int LO = ((int)(uintptr_t)pargs) & 15;
 	DP a = pdisp[disp];
+	LONGLONG profile_total = wdsp_profile_now();
+	LONGLONG profile_fft;
+	LONGLONG profile_post;
 
 	if (a->stop)
 	{
@@ -637,8 +641,11 @@ DWORD WINAPI spectra (void *pargs)
 			InterlockedDecrement(a->pnum_threads);
 			return 0;
 		}
+		profile_fft = wdsp_profile_now();
 		fftw_execute (a->plan[ss][LO]);
+		wdsp_profile_add(disp, WDSP_PROFILE_SPECTRUM_FFT, profile_fft);
 	}
+	profile_post = wdsp_profile_now();
 	if (a->stop)
 	{
 		InterlockedDecrement(a->pnum_threads);
@@ -673,6 +680,8 @@ DWORD WINAPI spectra (void *pargs)
 	else
 		LeaveCriticalSection (&(a->EliminateSection[ss]));
 
+	wdsp_profile_add(disp, WDSP_PROFILE_SPECTRUM_POST, profile_post);
+	wdsp_profile_add(disp, WDSP_PROFILE_SPECTRUM_TOTAL, profile_total);
 	InterlockedDecrement(a->pnum_threads);
 	return 1;
 }
@@ -850,6 +859,9 @@ DWORD WINAPI Cspectra (void *pargs)
 	int ss = (((int)(uintptr_t)pargs) >> 4) & 255;
 	int LO = ((int)(uintptr_t)pargs) & 15;
 	DP a = pdisp[disp];
+	LONGLONG profile_total = wdsp_profile_now();
+	LONGLONG profile_fft;
+	LONGLONG profile_post;
 	int trans_size = a->size * sizeof(double);
 
 	if (a->stop)
@@ -873,13 +885,16 @@ DWORD WINAPI Cspectra (void *pargs)
 			InterlockedDecrement(a->pnum_threads);
 			return 0;
 		}
+		profile_fft = wdsp_profile_now();
 		fftw_execute (a->Cplan[ss][LO]);
+		wdsp_profile_add(disp, WDSP_PROFILE_SPECTRUM_FFT, profile_fft);
 
 		// Detect value of Max FFT Bin in a freq range
 		DetectMaxBin(disp, ss, LO);
 		// 
 
 	}
+	profile_post = wdsp_profile_now();
 	if (a->stop)
 	{
 		InterlockedDecrement(a->pnum_threads);
@@ -921,6 +936,8 @@ DWORD WINAPI Cspectra (void *pargs)
 	else
 		LeaveCriticalSection (&(a->EliminateSection[ss]));
 
+	wdsp_profile_add(disp, WDSP_PROFILE_SPECTRUM_POST, profile_post);
+	wdsp_profile_add(disp, WDSP_PROFILE_SPECTRUM_TOTAL, profile_total);
 	InterlockedDecrement(a->pnum_threads);
 	return 1;
 }
