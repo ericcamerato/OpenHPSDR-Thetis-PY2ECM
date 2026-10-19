@@ -689,6 +689,7 @@
     <Compile Include="display.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="ThreeDSpectrumGpu.cs" />
     <Compile Include="DiversityForm.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -1639,9 +1639,9 @@ namespace Thetis
         }
 
         private static DisplayMode current_display_mode = DisplayMode.PANAFALL;
-        private const int Panafall3DRows = 32;
+        private const int Panafall3DRows = 96;
         private const int Panafall3DSamples = 2048;
-        private const int Panafall3DFrameStride = 3;
+        private const int Panafall3DFrameStride = 1;
         private static readonly float[,] panafall3DHistory = new float[Panafall3DRows, Panafall3DSamples];
         private static readonly float[] panafall3DBaseline = new float[Panafall3DRows];
         private static int panafall3DHead = -1;
@@ -1657,6 +1657,8 @@ namespace Thetis
         private static int threeDFloor = 6;
         private static int threeDGain = 70;
         private static int threeDSpan = 100;
+        private static ThreeDSpectrumGpu panafall3DGpu;
+        private static bool panafall3DGpuUnavailable;
 
         public static int ThreeDFloor
         {
@@ -3305,6 +3307,12 @@ namespace Thetis
 
                 try
                 {
+                    if (panafall3DGpu != null)
+                    {
+                        panafall3DGpu.Dispose();
+                        panafall3DGpu = null;
+                    }
+                    panafall3DGpuUnavailable = false;
                     if (_device != null && _device.ImmediateContext != null)
                     {
                         _device.ImmediateContext.ClearState();
@@ -5109,8 +5117,92 @@ namespace Thetis
                     panafall3DCount++;
             }
 
-            Draw3DStackedHistory(verticalShift, width, height,
-                gridMax, gridMin, fillBrush, transmitting);
+            if (!Draw3DHistoryGpu(verticalShift, width, height, gridMax, gridMin, transmitting))
+                Draw3DStackedHistory(verticalShift, width, height,
+                    gridMax, gridMin, fillBrush, transmitting);
+        }
+
+        private static Color[] Build3DPalette(int gridMin, int gridMax, bool transmitting)
+        {
+            Color[] palette = new Color[256];
+            bool gradient = transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient;
+            Color solid = transmitting ? data_fill_color_tx : data_fill_color;
+            if (!gradient || console == null || console.SetupForm == null)
+            {
+                for (int i = 0; i < palette.Length; i++) palette[i] = solid;
+                return palette;
+            }
+
+            List<ucLGPicker.ColourGradientData> stops = transmitting ?
+                console.SetupForm.TXGradPicker.GetColourGradientDataForDBMRange(gridMin, gridMax) :
+                console.SetupForm.RX1GradPicker.GetColourGradientDataForDBMRange(gridMin, gridMax);
+            if (stops == null || stops.Count == 0)
+            {
+                for (int i = 0; i < palette.Length; i++) palette[i] = solid;
+                return palette;
+            }
+            if (stops.Count == 1)
+            {
+                for (int i = 0; i < palette.Length; i++) palette[i] = stops[0].color;
+                return palette;
+            }
+            int upper = 1;
+            for (int i = 0; i < palette.Length; i++)
+            {
+                float position = i / 255f;
+                while (upper < stops.Count - 1 && stops[upper].percent < position) upper++;
+                int lower = Math.Max(0, upper - 1);
+                float width = stops[upper].percent - stops[lower].percent;
+                float amount = width <= 0 ? 0 :
+                    Math.Max(0f, Math.Min(1f, (position - stops[lower].percent) / width));
+                Color a = stops[lower].color;
+                Color b = stops[upper].color;
+                palette[i] = Color.FromArgb(255,
+                    (int)(a.R + (b.R - a.R) * amount),
+                    (int)(a.G + (b.G - a.G) * amount),
+                    (int)(a.B + (b.B - a.B) * amount));
+            }
+            return palette;
+        }
+
+        private static bool Draw3DHistoryGpu(int verticalShift, int width, int height,
+            int gridMax, int gridMin, bool transmitting)
+        {
+            if (panafall3DGpuUnavailable || _device == null || _d2dRenderTarget == null ||
+                panafall3DCount == 0) return false;
+            try
+            {
+                if (panafall3DGpu == null)
+                    panafall3DGpu = new ThreeDSpectrumGpu(_device, Panafall3DSamples, Panafall3DRows);
+                int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+                Color line = transmitting ? tx_data_line_color :
+                    (dataLine3DColors[mode] ?? data_line_color);
+                Color[] palette = Build3DPalette(gridMin, gridMax, transmitting);
+                float opacity = (transmitting ? data_fill_color_tx.A : data_fill_color.A) / 255f;
+                // D2D and D3D share the same device. Finish pending 2D commands before
+                // writing the off-screen 3D surface, then composite its live bitmap.
+                _d2dRenderTarget.Flush();
+                panafall3DGpu.Render(_d2dRenderTarget, width, height,
+                    panafall3DHistory, panafall3DHead, panafall3DCount, palette,
+                    gridMin - threeDFloor, Math.Max(1f, gridMax - gridMin),
+                    gridMin, gridMax, threeDGain, threeDSpan,
+                    Math.Max(0.15f, opacity), line);
+                _d2dRenderTarget.DrawBitmap(panafall3DGpu.Bitmap,
+                    new SharpDX.RectangleF(0, verticalShift, width, height),
+                    1f, BitmapInterpolationMode.Linear);
+                return true;
+            }
+            catch (Exception error)
+            {
+                System.Diagnostics.Debug.WriteLine("3D GPU renderer disabled: " + error);
+                panafall3DGpuUnavailable = true;
+                if (panafall3DGpu != null)
+                {
+                    panafall3DGpu.Dispose();
+                    panafall3DGpu = null;
+                }
+                return false;
+            }
         }
 
         // Shared SharpDX rendering for full-height 3D Pan and 3D Panafall.
@@ -5130,7 +5222,8 @@ namespace Thetis
                 new SharpDX.Mathematics.Interop.RawVector2[Panafall3DSamples];
             for (int age = panafall3DCount - 1; age >= 0; age--)
             {
-                if ((age & 1) != 0 && age != panafall3DCount - 1) continue;
+                // Keep the software fallback bounded when the GPU shader is unavailable.
+                if (age % 6 != 0 && age != panafall3DCount - 1) continue;
 
                 int row = (panafall3DHead - age + Panafall3DRows) % Panafall3DRows;
                 float depth = age / (float)Math.Max(1, Panafall3DRows - 1);
