@@ -11,14 +11,16 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <vector>
 #include <random>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 
-static const unsigned N = 4096;
-static const unsigned Iterations = 300;
+static unsigned N = 4096;
+static unsigned Iterations = 300;
+static unsigned Stages = 12;
 static const char* Shader = R"(
 StructuredBuffer<float2> input : register(t0);
 RWStructuredBuffer<float2> output : register(u0);
@@ -83,15 +85,24 @@ static bool check(HRESULT hr, const char* where)
     std::fprintf(stderr, "%s failed: 0x%08x\n", where, static_cast<unsigned>(hr));
     return false;
 }
-static unsigned reverse12(unsigned x)
+static unsigned reverseBits(unsigned x)
 {
     unsigned r = 0;
-    for (unsigned bit = 0; bit < 12; ++bit) { r = (r << 1) | (x & 1); x >>= 1; }
+    for (unsigned bit = 0; bit < Stages; ++bit) { r = (r << 1) | (x & 1); x >>= 1; }
     return r;
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc > 1) {
+        if (std::strcmp(argv[1], "262144") != 0) {
+            std::fprintf(stderr, "Usage: benchmark.exe [262144]\n");
+            return 1;
+        }
+        N = 262144;
+        Stages = 18;
+        Iterations = 40;
+    }
     ID3D11Device* device = nullptr;
     ID3D11DeviceContext* context = nullptr;
     D3D_FEATURE_LEVEL level;
@@ -177,14 +188,14 @@ int main()
 
     auto gpuFft = [&]() -> bool {
         for (unsigned i = 0; i < N; ++i) {
-            unsigned destination = reverse12(i);
+            unsigned destination = reverseBits(i);
             upload[destination * 2] = static_cast<float>(samples[i * 2]);
             upload[destination * 2 + 1] = static_cast<float>(samples[i * 2 + 1]);
         }
         context->UpdateSubresource(buffers[0], 0, nullptr, upload.data(), 0, 0);
         context->CSSetShader(shader, nullptr, 0);
         context->CSSetConstantBuffers(0, 1, &settings);
-        for (unsigned stage = 0; stage < 12; ++stage) {
+        for (unsigned stage = 0; stage < Stages; ++stage) {
             unsigned in = stage & 1;
             unsigned out = in ^ 1;
             unsigned constants[4] = { stage, 0, 0, 0 };
@@ -207,7 +218,7 @@ int main()
     };
     auto fusedGpuFft = [&]() -> bool {
         for (unsigned i = 0; i < N; ++i) {
-            unsigned destination = reverse12(i);
+            unsigned destination = reverseBits(i);
             upload[destination * 2] = static_cast<float>(samples[i * 2]);
             upload[destination * 2 + 1] = static_cast<float>(samples[i * 2 + 1]);
         }
@@ -250,7 +261,7 @@ int main()
             ok = false;
         }
     }
-    if (ok) {
+    if (ok && N == 4096) {
         ok = fusedGpuFft();
         double worstAbsolute = 0.0;
         for (unsigned i = 0; i < N; ++i) {
@@ -273,18 +284,21 @@ int main()
         for (unsigned iteration = 0; iteration < Iterations; ++iteration)
             if (!gpuFft()) { ok = false; break; }
         auto gpuEnd = std::chrono::steady_clock::now();
-        for (unsigned iteration = 0; iteration < Iterations; ++iteration)
-            if (!fusedGpuFft()) { ok = false; break; }
+        if (N == 4096)
+            for (unsigned iteration = 0; iteration < Iterations; ++iteration)
+                if (!fusedGpuFft()) { ok = false; break; }
         auto fusedEnd = std::chrono::steady_clock::now();
         double cpuUs = std::chrono::duration<double, std::micro>(cpuEnd - start).count() / Iterations;
         double gpuUs = std::chrono::duration<double, std::micro>(gpuEnd - cpuEnd).count() / Iterations;
         double fusedUs = std::chrono::duration<double, std::micro>(fusedEnd - gpuEnd).count() / Iterations;
         if (ok) {
             std::printf("FFTW CPU (input copy + FFT): %.2f us/frame\n", cpuUs);
-            std::printf("GPU end-to-end (upload + 12 stages + readback): %.2f us/frame\n", gpuUs);
-            std::printf("GPU fused end-to-end (upload + 1 dispatch + readback): %.2f us/frame\n", fusedUs);
+            std::printf("GPU end-to-end (upload + %u stages + readback): %.2f us/frame\n", Stages, gpuUs);
+            if (N == 4096)
+                std::printf("GPU fused end-to-end (upload + 1 dispatch + readback): %.2f us/frame\n", fusedUs);
             std::printf("GPU / FFTW wall-time ratio: %.2fx\n", gpuUs / cpuUs);
-            std::printf("Fused GPU / FFTW wall-time ratio: %.2fx\n", fusedUs / cpuUs);
+            if (N == 4096)
+                std::printf("Fused GPU / FFTW wall-time ratio: %.2fx\n", fusedUs / cpuUs);
         }
     }
     if (plan) fftw_destroy_plan(plan);
