@@ -254,6 +254,10 @@ namespace Thetis
 
         private static SharpDX.Direct2D1.Bitmap _waterfall_bmp_dx2d = null;					// MW0LGE
         private static SharpDX.Direct2D1.Bitmap _waterfall_bmp2_dx2d = null;
+        // Reuse GPU bitmaps for waterfall scrolling instead of allocating one per row.
+        private static SharpDX.Direct2D1.Bitmap _waterfall_scroll_dx2d = null;
+        private static SharpDX.Direct2D1.Bitmap _waterfall_scroll2_dx2d = null;
+        private static readonly byte[][] _waterfallRowBuffers = { new byte[0], new byte[0] };
         private static readonly long[][] _waterfallRowUtcTicks =
         {
             new long[0],
@@ -3213,6 +3217,7 @@ namespace Thetis
                         Utilities.Dispose(ref _waterfall_bmp_dx2d);
                         _waterfall_bmp_dx2d = null;
                     }
+                    Utilities.Dispose(ref _waterfall_scroll_dx2d);
                     _waterfall_bmp_dx2d = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget, new Size2(displayTargetWidth, H - 20), new BitmapProperties(new SDXPixelFormat(_swapChain.Description.ModeDescription.Format, ALPHA_MODE)));
                     clearWaterfallBitmapRegion(_waterfall_bmp_dx2d, 0, 0, displayTargetWidth, H - 20);
 
@@ -3268,6 +3273,7 @@ namespace Thetis
                         Utilities.Dispose(ref _waterfall_bmp2_dx2d);
                         _waterfall_bmp2_dx2d = null;
                     }
+                    Utilities.Dispose(ref _waterfall_scroll2_dx2d);
                     _waterfall_bmp2_dx2d = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget, new Size2(displayTargetWidth, H - 20), new BitmapProperties(new SDXPixelFormat(_swapChain.Description.ModeDescription.Format, ALPHA_MODE)));
                     clearWaterfallBitmapRegion(_waterfall_bmp2_dx2d, 0, 0, displayTargetWidth, H - 20);
 
@@ -3365,6 +3371,8 @@ namespace Thetis
 
                     Utilities.Dispose(ref _waterfall_bmp_dx2d);
                     Utilities.Dispose(ref _waterfall_bmp2_dx2d);
+                    Utilities.Dispose(ref _waterfall_scroll_dx2d);
+                    Utilities.Dispose(ref _waterfall_scroll2_dx2d);
 
                     if (_pause_bitmap != null)
                     {
@@ -3382,6 +3390,8 @@ namespace Thetis
                     _bitmapBackground = null;
                     _waterfall_bmp_dx2d = null;
                     _waterfall_bmp2_dx2d = null;
+                    _waterfall_scroll_dx2d = null;
+                    _waterfall_scroll2_dx2d = null;
 
                     _d2dRenderTarget = null;
                     _swapChain1 = null;
@@ -3789,6 +3799,8 @@ namespace Thetis
                         return false;
                     }
 
+                    Utilities.Dispose(ref _waterfall_scroll_dx2d);
+                    Utilities.Dispose(ref _waterfall_scroll2_dx2d);
                     Utilities.Dispose(ref _d2dRenderTarget);
                     Utilities.Dispose(ref _surface);
 
@@ -7188,7 +7200,11 @@ namespace Thetis
 
                     byte nbBitmapAlpaha = 255;
                     int pixel_size = 4;
-                    byte[] row = new byte[W * pixel_size];
+                    int rowIndex = rx == 1 ? 0 : 1;
+                    if (_waterfallRowBuffers[rowIndex].Length != W * pixel_size)
+                        _waterfallRowBuffers[rowIndex] = new byte[W * pixel_size];
+                    byte[] row = _waterfallRowBuffers[rowIndex];
+                    Array.Clear(row, 0, row.Length);
 
                     SharpDX.Direct2D1.Bitmap waterfallBitmap;
                     SharpDX.Direct2D1.Bitmap topPixels;
@@ -7216,9 +7232,22 @@ namespace Thetis
                     }
 
                     int preservedBitmapHeight = (int)waterfallBitmap.Size.Height - (addRow ? 1 : 0);
-                    topPixels = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget, new Size2((int)waterfallBitmap.Size.Width, preservedBitmapHeight), new BitmapProperties(new SDXPixelFormat(waterfallBitmap.PixelFormat.Format, ALPHA_MODE)));
-
-                    topPixels.CopyFromBitmap(waterfallBitmap, new SharpDX.Point(0, 0), new SharpDX.Rectangle(0, 0, (int)topPixels.Size.Width, preservedBitmapHeight));
+                    topPixels = rx == 1 ? _waterfall_scroll_dx2d : _waterfall_scroll2_dx2d;
+                    if (topPixels == null || topPixels.IsDisposed ||
+                        topPixels.Size.Width != waterfallBitmap.Size.Width ||
+                        topPixels.Size.Height != waterfallBitmap.Size.Height)
+                    {
+                        if (rx == 1) Utilities.Dispose(ref _waterfall_scroll_dx2d);
+                        else Utilities.Dispose(ref _waterfall_scroll2_dx2d);
+                        topPixels = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget,
+                            new Size2((int)waterfallBitmap.Size.Width, (int)waterfallBitmap.Size.Height),
+                            new BitmapProperties(new SDXPixelFormat(waterfallBitmap.PixelFormat.Format, ALPHA_MODE)));
+                        if (rx == 1) _waterfall_scroll_dx2d = topPixels;
+                        else _waterfall_scroll2_dx2d = topPixels;
+                    }
+                    if (preservedBitmapHeight > 0)
+                        topPixels.CopyFromBitmap(waterfallBitmap, new SharpDX.Point(0, 0),
+                            new SharpDX.Rectangle(0, 0, (int)waterfallBitmap.Size.Width, preservedBitmapHeight));
 
                     #region colours
                     switch (cScheme)
@@ -8143,7 +8172,7 @@ namespace Thetis
 
                         int copyWidth = W - Math.Abs(horizontalShiftPixels);
                         int shiftedRowTop = addRow ? 1 : 0;
-                        if (copyWidth > 0)
+                        if (copyWidth > 0 && preservedBitmapHeight > 0)
                         {
                             int sourceX = horizontalShiftPixels < 0 ? -horizontalShiftPixels : 0;
                             int destX = horizontalShiftPixels > 0 ? horizontalShiftPixels : 0;
@@ -8166,9 +8195,6 @@ namespace Thetis
 
                         if (addRow) recordWaterfallAdvance(rx, H - 20);
                     }
-
-                    Utilities.Dispose(ref topPixels);
-                    topPixels = null;
 
                     bool bIgnoreAgc = (rx == 1 && _ignore_waterfall_rx1_agc && (_high_perf_timer.ElapsedMsec < _rx1_no_agc_duration)) ||
                                         (rx == 2 && _ignore_waterfall_rx2_agc && (_high_perf_timer.ElapsedMsec < _rx2_no_agc_duration));
