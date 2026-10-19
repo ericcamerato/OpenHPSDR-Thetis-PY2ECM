@@ -1678,6 +1678,8 @@ namespace Thetis
         private static int threeDSpan = 100;
         private static ThreeDSpectrumGpu panafall3DGpu;
         private static bool panafall3DGpuUnavailable;
+        private static ThreeDSpectrumGpu panafall3DClassicGpu;
+        private static bool panafall3DClassicGpuUnavailable;
 
         public static int ThreeDFloor
         {
@@ -3352,7 +3354,13 @@ namespace Thetis
                         panafall3DGpu.Dispose();
                         panafall3DGpu = null;
                     }
+                    if (panafall3DClassicGpu != null)
+                    {
+                        panafall3DClassicGpu.Dispose();
+                        panafall3DClassicGpu = null;
+                    }
                     panafall3DGpuUnavailable = false;
+                    panafall3DClassicGpuUnavailable = false;
                     if (_device != null && _device.ImmediateContext != null)
                     {
                         _device.ImmediateContext.ClearState();
@@ -3801,6 +3809,18 @@ namespace Thetis
 
                     Utilities.Dispose(ref _waterfall_scroll_dx2d);
                     Utilities.Dispose(ref _waterfall_scroll2_dx2d);
+                    if (panafall3DGpu != null)
+                    {
+                        panafall3DGpu.Dispose();
+                        panafall3DGpu = null;
+                    }
+                    if (panafall3DClassicGpu != null)
+                    {
+                        panafall3DClassicGpu.Dispose();
+                        panafall3DClassicGpu = null;
+                    }
+                    panafall3DGpuUnavailable = false;
+                    panafall3DClassicGpuUnavailable = false;
                     Utilities.Dispose(ref _d2dRenderTarget);
                     Utilities.Dispose(ref _surface);
 
@@ -5225,8 +5245,56 @@ namespace Thetis
                     panafall3DClassicCount++;
             }
 
-            Draw3DStackedHistoryClassic(verticalShift, width, height,
-                gridMax, gridMin, fillBrush, transmitting);
+            if (!Draw3DHistoryClassicGpu(verticalShift, width, height,
+                gridMax, gridMin, fillBrush, transmitting))
+                Draw3DStackedHistoryClassic(verticalShift, width, height,
+                    gridMax, gridMin, fillBrush, transmitting);
+        }
+
+        private static bool Draw3DHistoryClassicGpu(int verticalShift, int width, int height,
+            int gridMax, int gridMin, SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
+        {
+            if (panafall3DClassicGpuUnavailable || _device == null ||
+                _d2dRenderTarget == null || panafall3DClassicCount == 0)
+                return false;
+            try
+            {
+                if (panafall3DClassicGpu == null)
+                    panafall3DClassicGpu = new ThreeDSpectrumGpu(_device,
+                        Panafall3DClassicSamples, Panafall3DClassicRows);
+                int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+                Color peak = dataPeaks3DColors[mode] ?? Color.FromArgb(240, 255, 65, 100);
+                Color tx = Color.FromArgb(215,
+                    Math.Max(150, (int)data_fill_color_tx.R),
+                    Math.Min(255, data_fill_color_tx.G + 40),
+                    Math.Min(255, data_fill_color_tx.B + 40));
+                Color[] palette = Build3DPalette(gridMin, gridMax, transmitting);
+                _d2dRenderTarget.Flush();
+                panafall3DClassicGpu.RenderClassic(_d2dRenderTarget, width, height,
+                    panafall3DClassicHistory, panafall3DClassicBaseline,
+                    panafall3DClassicHead, panafall3DClassicCount, palette,
+                    gridMin, gridMax,
+                    transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient,
+                    transmitting, fillBrush.Opacity,
+                    Color.FromArgb(220, 30, 85, 230),
+                    Color.FromArgb(225, 35, 215, 245),
+                    Color.FromArgb(230, 95, 240, 95), peak, tx);
+                _d2dRenderTarget.DrawBitmap(panafall3DClassicGpu.Bitmap,
+                    new SharpDX.RectangleF(0, verticalShift, width, height),
+                    1f, BitmapInterpolationMode.Linear);
+                return true;
+            }
+            catch (Exception error)
+            {
+                System.Diagnostics.Debug.WriteLine("Classic 3D GPU renderer disabled: " + error);
+                panafall3DClassicGpuUnavailable = true;
+                if (panafall3DClassicGpu != null)
+                {
+                    panafall3DClassicGpu.Dispose();
+                    panafall3DClassicGpu = null;
+                }
+                return false;
+            }
         }
 
         private static void Draw3DStackedHistoryClassic(int verticalShift, int width,

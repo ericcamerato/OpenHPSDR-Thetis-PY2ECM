@@ -38,6 +38,12 @@ cbuffer Frame : register(b0)
     float4 shape;     // back width, depth span, max ridge, height curve
     float4 row;       // row age, columns, fill opacity, outline opacity
     float4 outline;   // configured data-line colour
+    float4 classicSettings; // row baseline, gradient, TX, gradient opacity
+    float4 classicNear;
+    float4 classicMid;
+    float4 classicFar;
+    float4 classicPeak;
+    float4 classicTx;
 };
 
 struct Varying
@@ -46,6 +52,7 @@ struct Varying
     float lut : TEXCOORD0;
     float depth : TEXCOORD1;
     float edge : TEXCOORD2;
+    float prominence : TEXCOORD3;
 };
 
 Varying vertexAt(uint column, float edge)
@@ -73,7 +80,77 @@ Varying vertexAt(uint column, float edge)
     o.lut = edge > 0.5 ? saturate((levels.x - levels.z) / max(levels.w, 1.0)) : colour;
     o.depth = depth;
     o.edge = edge;
+    o.prominence = 0.0;
     return o;
+}
+
+Varying classicVertexAt(uint column, float edge)
+{
+    Varying o;
+    int ring = ((int)plot.z - (int)row.x + (int)plot.w) % (int)plot.w;
+    float dbm = History.Load(int3((int)column, ring, 0));
+    float depth = row.x / max(plot.w - 1.0, 1.0);
+    float horizontalScale = 1.0 - 0.12 * depth;
+    float frequency = column / max(row.y - 1.0, 1.0);
+    float x = 0.5 + (frequency - 0.5) * horizontalScale;
+    float floorY = 0.96 - 0.44 * depth;
+    float amplitude = 0.79 - 0.24 * depth;
+    float level = saturate((dbm - levels.z) / max(levels.w, 1.0));
+    float prominence = saturate((dbm - classicSettings.x - 5.0) / 25.0);
+    float y = edge > 0.5 ? floorY : max(0.04,
+        floorY - level * amplitude - prominence * 0.12);
+    o.position = float4(x * 2.0 - 1.0, 1.0 - y * 2.0, 0.0, 1.0);
+    o.lut = edge > 0.5 ? 0.0 : level;
+    o.depth = depth;
+    o.edge = edge;
+    o.prominence = prominence;
+    return o;
+}
+
+Varying classicColumnVertex(uint id : SV_VertexID)
+{
+    uint corner = id % 6;
+    float bottom = (corner == 2 || corner == 3 || corner == 5) ? 1.0 : 0.0;
+    float right = (corner == 1 || corner == 4 || corner == 5) ? 1.0 : -1.0;
+    Varying o = classicVertexAt(id / 6, bottom);
+    float width = 1.0 - 0.12 * o.depth;
+    float columnPixels = max(1.5, plot.x * width / max(row.y - 1.0, 1.0));
+    o.position.x += right * columnPixels / max(plot.x, 1.0);
+    return o;
+}
+
+Varying classicRidgeVertex(uint id : SV_VertexID)
+{
+    return classicVertexAt(id, 0.0);
+}
+
+float4 classicColour(Varying v)
+{
+    if (classicSettings.y > 0.5)
+    {
+        int index = (int)round(saturate(v.lut) * 255.0);
+        float3 rgb = Palette.Load(int3(index, 0, 0)).rgb;
+        return float4(rgb, classicSettings.w);
+    }
+    if (classicSettings.z > 0.5) return classicTx;
+    return v.depth > 0.66 ? classicFar :
+        (v.depth > 0.33 ? classicMid : classicNear);
+}
+
+float4 classicFillPixel(Varying v) : SV_TARGET
+{
+    float4 colour = classicColour(v);
+    float alpha = colour.a * (0.38 + 0.35 * (1.0 - v.depth));
+    return float4(colour.rgb * alpha, alpha);
+}
+
+float4 classicRidgePixel(Varying v) : SV_TARGET
+{
+    bool peak = classicSettings.z < 0.5 && v.prominence > 0.55;
+    float4 colour = peak ? classicPeak : classicColour(v);
+    float alpha = peak ? colour.a :
+        colour.a * (0.38 + 0.35 * (1.0 - v.depth));
+    return float4(colour.rgb * alpha, alpha);
 }
 
 Varying fillVertex(uint id : SV_VertexID)
@@ -120,6 +197,12 @@ float4 ridgePixel(Varying v) : SV_TARGET
             public Vector4 Shape;
             public Vector4 Row;
             public Vector4 Outline;
+            public Vector4 ClassicSettings;
+            public Vector4 ClassicNear;
+            public Vector4 ClassicMid;
+            public Vector4 ClassicFar;
+            public Vector4 ClassicPeak;
+            public Vector4 ClassicTx;
         }
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -144,8 +227,12 @@ float4 ridgePixel(Varying v) : SV_TARGET
         private readonly VertexShader fillVS;
         private readonly VertexShader ridgeVS;
         private readonly VertexShader frontRibbonVS;
+        private readonly VertexShader classicColumnVS;
+        private readonly VertexShader classicRidgeVS;
         private readonly PixelShader fillPS;
         private readonly PixelShader ridgePS;
+        private readonly PixelShader classicFillPS;
+        private readonly PixelShader classicRidgePS;
         private readonly Buffer frameBuffer;
         private readonly BlendState blendState;
         private readonly RasterizerState rasterizerState;
@@ -159,6 +246,7 @@ float4 ridgePixel(Varying v) : SV_TARGET
         private int outputWidth;
         private int outputHeight;
         private int paletteHash;
+        private readonly float[] uploadRow;
 
         public SharpDX.Direct2D1.Bitmap Bitmap { get { return outputBitmap; } }
 
@@ -174,8 +262,12 @@ float4 ridgePixel(Varying v) : SV_TARGET
             fillVS = new VertexShader(device, Compile("fillVertex", "vs_4_0"));
             ridgeVS = new VertexShader(device, Compile("ridgeVertex", "vs_4_0"));
             frontRibbonVS = new VertexShader(device, Compile("frontRibbonVertex", "vs_4_0"));
+            classicColumnVS = new VertexShader(device, Compile("classicColumnVertex", "vs_4_0"));
+            classicRidgeVS = new VertexShader(device, Compile("classicRidgeVertex", "vs_4_0"));
             fillPS = new PixelShader(device, Compile("fillPixel", "ps_4_0"));
             ridgePS = new PixelShader(device, Compile("ridgePixel", "ps_4_0"));
+            classicFillPS = new PixelShader(device, Compile("classicFillPixel", "ps_4_0"));
+            classicRidgePS = new PixelShader(device, Compile("classicRidgePixel", "ps_4_0"));
             frameBuffer = new Buffer(device, Utilities.SizeOf<FrameConstants>(),
                 ResourceUsage.Default, BindFlags.ConstantBuffer,
                 CpuAccessFlags.None, ResourceOptionFlags.None, 0);
@@ -217,6 +309,7 @@ float4 ridgePixel(Varying v) : SV_TARGET
                 OptionFlags = ResourceOptionFlags.None
             });
             historyView = new ShaderResourceView(device, historyTexture);
+            uploadRow = new float[columns];
             paletteTexture = new Texture2D(device, new Texture2DDescription
             {
                 Width = PaletteSize,
@@ -361,16 +454,75 @@ float4 ridgePixel(Varying v) : SV_TARGET
             context.Flush();
         }
 
+        private static Vector4 ColourVector(Color colour)
+        {
+            return new Vector4(colour.R / 255f, colour.G / 255f,
+                colour.B / 255f, colour.A / 255f);
+        }
+
+        public void RenderClassic(SharpDX.Direct2D1.RenderTarget target, int width, int height,
+            float[,] history, float[] baselines, int head, int count, Color[] palette,
+            int gridMin, int gridMax, bool gradient, bool transmitting,
+            float gradientOpacity, Color near, Color mid, Color far, Color peak, Color tx)
+        {
+            if (count == 0 || width < 2 || height < 2) return;
+            EnsureOutput(target, width, height);
+            UploadHistory(history);
+            UploadPalette(palette);
+
+            context.OutputMerger.SetRenderTargets(outputView);
+            context.OutputMerger.SetBlendState(blendState);
+            context.Rasterizer.State = rasterizerState;
+            context.Rasterizer.SetViewport(0, 0, width, height);
+            context.ClearRenderTargetView(outputView, new Color4(0f, 0f, 0f, 0f));
+            context.InputAssembler.InputLayout = null;
+            context.VertexShader.SetConstantBuffer(0, frameBuffer);
+            context.VertexShader.SetShaderResource(0, historyView);
+            context.PixelShader.SetConstantBuffer(0, frameBuffer);
+            context.PixelShader.SetShaderResource(1, paletteView);
+
+            FrameConstants frame = new FrameConstants
+            {
+                Plot = new Vector4(width, height, head, rows),
+                Levels = new Vector4(0f, 0f, gridMin, Math.Max(1f, gridMax - gridMin)),
+                ClassicNear = ColourVector(near),
+                ClassicMid = ColourVector(mid),
+                ClassicFar = ColourVector(far),
+                ClassicPeak = ColourVector(peak),
+                ClassicTx = ColourVector(tx)
+            };
+            for (int age = Math.Min(count, rows) - 1; age >= 0; age--)
+            {
+                if ((age & 1) != 0 && age != count - 1) continue;
+                int ring = (head - age + rows) % rows;
+                frame.Row = new Vector4(age, columns, 0f, 0f);
+                frame.ClassicSettings = new Vector4(baselines[ring], gradient ? 1f : 0f,
+                    transmitting ? 1f : 0f, gradientOpacity);
+                context.UpdateSubresource(ref frame, frameBuffer);
+                context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+                context.VertexShader.Set(classicColumnVS);
+                context.PixelShader.Set(classicFillPS);
+                context.Draw(columns * 6, 0);
+                context.InputAssembler.PrimitiveTopology = PrimitiveTopology.LineStrip;
+                context.VertexShader.Set(classicRidgeVS);
+                context.PixelShader.Set(classicRidgePS);
+                context.Draw(columns, 0);
+            }
+            context.VertexShader.SetShaderResource(0, null);
+            context.PixelShader.SetShaderResource(1, null);
+            context.OutputMerger.SetRenderTargets((RenderTargetView)null);
+            context.Flush();
+        }
+
         private void UploadHistory(float[,] history)
         {
             DataBox box = context.MapSubresource(historyTexture, 0,
                 MapMode.WriteDiscard, MapFlags.None);
-            float[] row = new float[columns];
             for (int r = 0; r < rows; r++)
             {
                 System.Buffer.BlockCopy(history, r * columns * sizeof(float),
-                    row, 0, columns * sizeof(float));
-                Marshal.Copy(row, 0, IntPtr.Add(box.DataPointer, r * box.RowPitch), columns);
+                    uploadRow, 0, columns * sizeof(float));
+                Marshal.Copy(uploadRow, 0, IntPtr.Add(box.DataPointer, r * box.RowPitch), columns);
             }
             context.UnmapSubresource(historyTexture, 0);
         }
@@ -418,8 +570,12 @@ float4 ridgePixel(Varying v) : SV_TARGET
             frameBuffer.Dispose();
             ridgePS.Dispose();
             fillPS.Dispose();
+            classicRidgePS.Dispose();
+            classicFillPS.Dispose();
             ridgeVS.Dispose();
             frontRibbonVS.Dispose();
+            classicRidgeVS.Dispose();
+            classicColumnVS.Dispose();
             fillVS.Dispose();
         }
     }
