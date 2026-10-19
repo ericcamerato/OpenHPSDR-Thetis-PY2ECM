@@ -80,6 +80,15 @@ Varying ridgeVertex(uint id : SV_VertexID)
     return vertexAt(id, 0.0);
 }
 
+Varying frontRibbonVertex(uint id : SV_VertexID)
+{
+    Varying o = vertexAt(id / 2, 0.0);
+    float halfWidthPixels = 1.3;
+    o.position.y += (id % 2 == 0 ? 1.0 : -1.0) *
+        (2.0 * halfWidthPixels / max(plot.y, 1.0));
+    return o;
+}
+
 float4 fillPixel(Varying v) : SV_TARGET
 {
     int index = (int)round(saturate(v.lut) * 255.0);
@@ -128,6 +137,7 @@ float4 ridgePixel(Varying v) : SV_TARGET
         private readonly int rows;
         private readonly VertexShader fillVS;
         private readonly VertexShader ridgeVS;
+        private readonly VertexShader frontRibbonVS;
         private readonly PixelShader fillPS;
         private readonly PixelShader ridgePS;
         private readonly Buffer frameBuffer;
@@ -157,6 +167,7 @@ float4 ridgePixel(Varying v) : SV_TARGET
 
             fillVS = new VertexShader(device, Compile("fillVertex", "vs_4_0"));
             ridgeVS = new VertexShader(device, Compile("ridgeVertex", "vs_4_0"));
+            frontRibbonVS = new VertexShader(device, Compile("frontRibbonVertex", "vs_4_0"));
             fillPS = new PixelShader(device, Compile("fillPixel", "ps_4_0"));
             ridgePS = new PixelShader(device, Compile("ridgePixel", "ps_4_0"));
             frameBuffer = new Buffer(device, Utilities.SizeOf<FrameConstants>(),
@@ -331,6 +342,12 @@ float4 ridgePixel(Varying v) : SV_TARGET
                 context.VertexShader.Set(ridgeVS);
                 context.PixelShader.Set(ridgePS);
                 context.Draw(columns, 0);
+                if (age == 0)
+                {
+                    context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
+                    context.VertexShader.Set(frontRibbonVS);
+                    context.Draw(columns * 2, 0);
+                }
             }
             context.VertexShader.SetShaderResource(0, null);
             context.PixelShader.SetShaderResource(1, null);
@@ -396,6 +413,7 @@ float4 ridgePixel(Varying v) : SV_TARGET
             ridgePS.Dispose();
             fillPS.Dispose();
             ridgeVS.Dispose();
+            frontRibbonVS.Dispose();
             fillVS.Dispose();
         }
     }
