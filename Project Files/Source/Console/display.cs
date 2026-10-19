@@ -1639,8 +1639,8 @@ namespace Thetis
         }
 
         private static DisplayMode current_display_mode = DisplayMode.PANAFALL;
-        private const int Panafall3DRows = 18;
-        private const int Panafall3DSamples = 512;
+        private const int Panafall3DRows = 20;
+        private const int Panafall3DSamples = 1024;
         private static readonly float[,] panafall3DHistory = new float[Panafall3DRows, Panafall3DSamples];
         private static readonly float[] panafall3DBaseline = new float[Panafall3DRows];
         private static int panafall3DHead = -1;
@@ -5098,47 +5098,91 @@ namespace Thetis
             SharpDX.Direct2D1.Brush terrainPeakBrush = !transmitting && dataPeaks3DBrushes[mode] != null ?
                 dataPeaks3DBrushes[mode] : m_bDX2_3DPeakBrush;
 
-            // Alternating history traces bounds the draw-call cost in either mode.
+            // A single filled surface per history row preserves fine FFT peaks without
+            // issuing one Direct2D draw call for every vertical spectrum column.
+            SharpDX.Mathematics.Interop.RawVector2[] ridge =
+                new SharpDX.Mathematics.Interop.RawVector2[Panafall3DSamples];
             for (int age = panafall3DCount - 1; age >= 0; age--)
             {
                 if ((age & 1) != 0 && age != panafall3DCount - 1) continue;
 
                 int row = (panafall3DHead - age + Panafall3DRows) % Panafall3DRows;
                 float depth = age / (float)Math.Max(1, Panafall3DRows - 1);
-                float horizontalScale = 1f - 0.12f * depth;
-                float floorY = verticalShift + height * (0.96f - 0.44f * depth);
-                float amplitude = height * (0.79f - 0.24f * depth);
-                float columnWidth = Math.Max(1.5f,
-                    width * horizontalScale / (Panafall3DSamples - 1));
+                float horizontalScale = 1f - 0.11f * depth;
+                float floorDbm = panafall3DBaseline[row] - 8f;
+                // Both the surface and the live 2D trace use the same dB scale.
+                // Moving the panadapter level therefore moves the 3D terrain too.
+                float floorY = Math.Max(verticalShift + height * 0.12f,
+                    Math.Min(verticalShift + height * 0.98f,
+                        verticalShift + height * (gridMax - floorDbm) / dbRange -
+                        depth * height * 0.34f));
+                float reliefPerDb = height * 1.2f / dbRange;
                 SharpDX.Direct2D1.Brush paletteBrush = depth > 0.66f ?
                     m_bDX2_3DFarBrush : depth > 0.33f ?
                     m_bDX2_3DMidBrush : m_bDX2_3DNearBrush;
                 SharpDX.Direct2D1.Brush terrainBrush = useGradient ? fillBrush :
                     transmitting ? m_bDX2_3DTxBrush : paletteBrush;
-                float originalOpacity = terrainBrush.Opacity;
-                terrainBrush.Opacity = originalOpacity * (0.38f + 0.35f * (1f - depth));
+                SharpDX.Direct2D1.Brush ridgeBrush = dataLine3DBrushes[mode] ??
+                    (transmitting ? m_bDX2_tx_data_line_pen_brush :
+                        m_bDX2_data_line_pen_brush);
+                float terrainOpacity = terrainBrush.Opacity;
+                float ridgeOpacity = ridgeBrush == null ? 0f : ridgeBrush.Opacity;
+                terrainBrush.Opacity = terrainOpacity * (0.34f + 0.25f * (1f - depth));
 
-                SharpDX.Vector2 previous = new SharpDX.Vector2();
                 for (int sample = 0; sample < Panafall3DSamples; sample++)
                 {
-                    float level = Math.Max(0f, Math.Min(1f,
-                        (panafall3DHistory[row, sample] - gridMin) / dbRange));
-                    float prominence = Math.Max(0f, Math.Min(1f,
-                        (panafall3DHistory[row, sample] - panafall3DBaseline[row] - 5f) / 25f));
                     float x = centreX +
                         (sample * (width - 1f) / (Panafall3DSamples - 1) - centreX) * horizontalScale;
                     float y = Math.Max(verticalShift + height * 0.04f,
-                        floorY - level * amplitude - prominence * height * 0.12f);
-                    SharpDX.Vector2 point = new SharpDX.Vector2(x, y);
-                    _d2dRenderTarget.DrawLine(point, new SharpDX.Vector2(x, floorY),
-                        terrainBrush, columnWidth);
-                    if (sample > 0)
-                        _d2dRenderTarget.DrawLine(previous, point,
-                            prominence > 0.55f && !transmitting ?
-                            terrainPeakBrush : terrainBrush, 1f);
-                    previous = point;
+                        floorY - Math.Max(0f,
+                            panafall3DHistory[row, sample] - floorDbm) * reliefPerDb);
+                    ridge[sample] = new SharpDX.Mathematics.Interop.RawVector2(x, y);
                 }
-                terrainBrush.Opacity = originalOpacity;
+
+                using (var surface = new SharpDX.Direct2D1.PathGeometry(_d2dRenderTarget.Factory))
+                using (var sink = surface.Open())
+                {
+                    sink.BeginFigure(new SharpDX.Vector2(ridge[0].X, floorY),
+                        SharpDX.Direct2D1.FigureBegin.Filled);
+                    sink.AddLines(ridge);
+                    sink.AddLine(new SharpDX.Vector2(ridge[Panafall3DSamples - 1].X, floorY));
+                    sink.EndFigure(SharpDX.Direct2D1.FigureEnd.Closed);
+                    sink.Close();
+                    _d2dRenderTarget.FillGeometry(surface, terrainBrush);
+                }
+                terrainBrush.Opacity = terrainOpacity;
+
+                if (ridgeBrush != null)
+                {
+                    ridgeBrush.Opacity = ridgeOpacity * (0.28f + 0.56f * (1f - depth));
+                    using (var contour = new SharpDX.Direct2D1.PathGeometry(_d2dRenderTarget.Factory))
+                    using (var sink = contour.Open())
+                    {
+                        sink.BeginFigure(ridge[0], SharpDX.Direct2D1.FigureBegin.Hollow);
+                        sink.AddLines(ridge);
+                        sink.EndFigure(SharpDX.Direct2D1.FigureEnd.Open);
+                        sink.Close();
+                        _d2dRenderTarget.DrawGeometry(contour, ridgeBrush,
+                            0.85f + 0.35f * (1f - depth));
+                    }
+                    ridgeBrush.Opacity = ridgeOpacity;
+                }
+
+                // Small signal crests catch the light; the quiet-band texture
+                // keeps its own colour and does not become a wall of red.
+                if (!transmitting && age <= 4)
+                {
+                    float peakOpacity = terrainPeakBrush.Opacity;
+                    terrainPeakBrush.Opacity = peakOpacity * (0.35f + 0.35f * (1f - depth));
+                    for (int sample = 1; sample < Panafall3DSamples; sample++)
+                    {
+                        if (panafall3DHistory[row, sample] - panafall3DBaseline[row] >= 18f &&
+                            panafall3DHistory[row, sample - 1] - panafall3DBaseline[row] >= 18f)
+                            _d2dRenderTarget.DrawLine(ridge[sample - 1], ridge[sample],
+                                terrainPeakBrush, 1.4f);
+                    }
+                    terrainPeakBrush.Opacity = peakOpacity;
+                }
             }
         }
 
