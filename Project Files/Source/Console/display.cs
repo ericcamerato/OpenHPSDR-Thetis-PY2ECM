@@ -1655,6 +1655,20 @@ namespace Thetis
         private static bool panafall3DClassic;
         private static bool? panafall3DLastTx;
         private static int panafall3DFrameCounter;
+        // Preserve the v2.10.3.16 renderer independently of the new GPU history.
+        private const int Panafall3DClassicRows = 18;
+        private const int Panafall3DClassicSamples = 512;
+        private static readonly float[,] panafall3DClassicHistory =
+            new float[Panafall3DClassicRows, Panafall3DClassicSamples];
+        private static readonly float[] panafall3DClassicBaseline = new float[Panafall3DClassicRows];
+        private static int panafall3DClassicHead = -1;
+        private static int panafall3DClassicCount;
+        private static int panafall3DClassicWidth;
+        private static int panafall3DClassicHeight;
+        private static int panafall3DClassicSampleCount;
+        private static long panafall3DClassicLeftEdge;
+        private static long panafall3DClassicRightEdge;
+        private static bool? panafall3DClassicLastTx;
         private static int threeDFloor = 6;
         private static int threeDGain = 70;
         private static int threeDSpan = 100;
@@ -1705,6 +1719,14 @@ namespace Thetis
             panafall3DCount = 0;
             panafall3DLastTx = null;
             panafall3DFrameCounter = 0;
+            ResetPanafall3DClassicHistory();
+        }
+
+        private static void ResetPanafall3DClassicHistory()
+        {
+            panafall3DClassicHead = -1;
+            panafall3DClassicCount = 0;
+            panafall3DClassicLastTx = null;
         }
         public static DisplayMode CurrentDisplayMode
         {
@@ -5082,6 +5104,14 @@ namespace Thetis
             long leftEdge, long rightEdge, bool freshFrame,
             SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
         {
+            if (panafall3DClassic)
+            {
+                DrawPanafall3DHistoryClassic(verticalShift, width, height,
+                    sampleCount, data, offset, gridMax, gridMin, leftEdge, rightEdge,
+                    freshFrame, fillBrush, transmitting);
+                return;
+            }
+
             if (width < 2 || height < 2 || sampleCount < 2 ||
                 fillBrush == null || m_bDX2_grid_pen == null ||
                 m_bDX2_3DNearBrush == null || m_bDX2_3DMidBrush == null ||
@@ -5129,10 +5159,116 @@ namespace Thetis
                     panafall3DCount++;
             }
 
-            if (panafall3DClassic ||
-                !Draw3DHistoryGpu(verticalShift, width, height, gridMax, gridMin, transmitting))
+            if (!Draw3DHistoryGpu(verticalShift, width, height, gridMax, gridMin, transmitting))
                 Draw3DStackedHistory(verticalShift, width, height,
                     gridMax, gridMin, fillBrush, transmitting);
+        }
+
+        // The original v2.10.3.16 sampling and SharpDX drawing path, shared by
+        // 3D Pan Classic and 3D PF Classic.
+        private static void DrawPanafall3DHistoryClassic(int verticalShift, int width, int height,
+            int sampleCount, float[] data, float offset, int gridMax, int gridMin,
+            long leftEdge, long rightEdge, bool freshFrame,
+            SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
+        {
+            if (width < 2 || height < 2 || sampleCount < 2 ||
+                fillBrush == null || m_bDX2_grid_pen == null ||
+                m_bDX2_3DNearBrush == null || m_bDX2_3DMidBrush == null ||
+                m_bDX2_3DFarBrush == null || m_bDX2_3DPeakBrush == null ||
+                m_bDX2_3DTxBrush == null)
+                return;
+
+            if ((panafall3DClassicLastTx.HasValue && panafall3DClassicLastTx.Value != transmitting) ||
+                panafall3DClassicWidth != width || panafall3DClassicHeight != height ||
+                panafall3DClassicSampleCount != sampleCount ||
+                panafall3DClassicLeftEdge != leftEdge || panafall3DClassicRightEdge != rightEdge)
+            {
+                ResetPanafall3DClassicHistory();
+                panafall3DClassicWidth = width;
+                panafall3DClassicHeight = height;
+                panafall3DClassicSampleCount = sampleCount;
+                panafall3DClassicLeftEdge = leftEdge;
+                panafall3DClassicRightEdge = rightEdge;
+            }
+            panafall3DClassicLastTx = transmitting;
+
+            if (freshFrame)
+            {
+                panafall3DClassicHead = (panafall3DClassicHead + 1) % Panafall3DClassicRows;
+                float sum = 0f;
+                for (int sample = 0; sample < Panafall3DClassicSamples; sample++)
+                {
+                    int first = sample * sampleCount / Panafall3DClassicSamples;
+                    int last = Math.Max(first + 1,
+                        (sample + 1) * sampleCount / Panafall3DClassicSamples);
+                    float strongest = float.MinValue;
+                    for (int source = first; source < last; source++)
+                        strongest = Math.Max(strongest, data[source]);
+                    float dbm = strongest + offset;
+                    panafall3DClassicHistory[panafall3DClassicHead, sample] = dbm;
+                    sum += dbm;
+                }
+                panafall3DClassicBaseline[panafall3DClassicHead] = sum / Panafall3DClassicSamples;
+                if (panafall3DClassicCount < Panafall3DClassicRows)
+                    panafall3DClassicCount++;
+            }
+
+            Draw3DStackedHistoryClassic(verticalShift, width, height,
+                gridMax, gridMin, fillBrush, transmitting);
+        }
+
+        private static void Draw3DStackedHistoryClassic(int verticalShift, int width,
+            int height, int gridMax, int gridMin,
+            SharpDX.Direct2D1.Brush fillBrush, bool transmitting)
+        {
+            float centreX = (width - 1f) / 2f;
+            float dbRange = Math.Max(1f, gridMax - gridMin);
+            bool useGradient = transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient;
+            int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+            SharpDX.Direct2D1.Brush terrainPeakBrush = !transmitting && dataPeaks3DBrushes[mode] != null ?
+                dataPeaks3DBrushes[mode] : m_bDX2_3DPeakBrush;
+
+            for (int age = panafall3DClassicCount - 1; age >= 0; age--)
+            {
+                if ((age & 1) != 0 && age != panafall3DClassicCount - 1) continue;
+
+                int row = (panafall3DClassicHead - age + Panafall3DClassicRows) % Panafall3DClassicRows;
+                float depth = age / (float)Math.Max(1, Panafall3DClassicRows - 1);
+                float horizontalScale = 1f - 0.12f * depth;
+                float floorY = verticalShift + height * (0.96f - 0.44f * depth);
+                float amplitude = height * (0.79f - 0.24f * depth);
+                float columnWidth = Math.Max(1.5f,
+                    width * horizontalScale / (Panafall3DClassicSamples - 1));
+                SharpDX.Direct2D1.Brush paletteBrush = depth > 0.66f ?
+                    m_bDX2_3DFarBrush : depth > 0.33f ?
+                    m_bDX2_3DMidBrush : m_bDX2_3DNearBrush;
+                SharpDX.Direct2D1.Brush terrainBrush = useGradient ? fillBrush :
+                    transmitting ? m_bDX2_3DTxBrush : paletteBrush;
+                float originalOpacity = terrainBrush.Opacity;
+                terrainBrush.Opacity = originalOpacity * (0.38f + 0.35f * (1f - depth));
+
+                SharpDX.Vector2 previous = new SharpDX.Vector2();
+                for (int sample = 0; sample < Panafall3DClassicSamples; sample++)
+                {
+                    float level = Math.Max(0f, Math.Min(1f,
+                        (panafall3DClassicHistory[row, sample] - gridMin) / dbRange));
+                    float prominence = Math.Max(0f, Math.Min(1f,
+                        (panafall3DClassicHistory[row, sample] - panafall3DClassicBaseline[row] - 5f) / 25f));
+                    float x = centreX +
+                        (sample * (width - 1f) / (Panafall3DClassicSamples - 1) - centreX) * horizontalScale;
+                    float y = Math.Max(verticalShift + height * 0.04f,
+                        floorY - level * amplitude - prominence * height * 0.12f);
+                    SharpDX.Vector2 point = new SharpDX.Vector2(x, y);
+                    _d2dRenderTarget.DrawLine(point, new SharpDX.Vector2(x, floorY),
+                        terrainBrush, columnWidth);
+                    if (sample > 0)
+                        _d2dRenderTarget.DrawLine(previous, point,
+                            prominence > 0.55f && !transmitting ?
+                            terrainPeakBrush : terrainBrush, 1f);
+                    previous = point;
+                }
+                terrainBrush.Opacity = originalOpacity;
+            }
         }
 
         private static Color[] Build3DPalette(int gridMin, int gridMax, bool transmitting)

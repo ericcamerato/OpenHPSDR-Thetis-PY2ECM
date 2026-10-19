@@ -2409,7 +2409,7 @@
             this.comboDisplayMode.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(46)))), ((int)(((byte)(46)))));
             this.comboDisplayMode.DisplayMember = "0";
             this.comboDisplayMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboDisplayMode.DropDownWidth = 88;
+            this.comboDisplayMode.DropDownWidth = 130;
             resources.ApplyResources(this.comboDisplayMode, "comboDisplayMode");
             this.comboDisplayMode.ForeColor = System.Drawing.SystemColors.ControlLightLight;
             this.comboDisplayMode.Name = "comboDisplayMode";
