@@ -57,9 +57,15 @@ Varying vertexAt(uint column, float edge)
     float depth = row.x / max(plot.w - 1.0, 1.0);
     float width = lerp(1.0, shape.x, depth);
     float x = 0.5 + (frequency - 0.5) * width;
-    float baseline = 1.0 - depth * shape.y;
-    float strength = saturate((dbm - levels.x) / max(levels.y, 1.0));
-    float height = pow(strength, max(shape.w, 0.05)) * shape.z * width;
+    // The terrain floor follows the same dBm scale as the live 2D trace.
+    // A fixed screen-space floor makes the two drawings cross as the grid moves.
+    float baseline = (levels.z + levels.w - levels.x) /
+        max(levels.w, 1.0) - depth * shape.y;
+    // At depth zero baseline minus panHeight is exactly the 2D trace Y.
+    float panHeight = (dbm - levels.x) / max(levels.w, 1.0);
+    float terrainStrength = saturate((dbm - levels.x) / max(levels.y, 1.0));
+    float terrainHeight = pow(terrainStrength, max(shape.w, 0.05)) * shape.z * width;
+    float height = lerp(panHeight, terrainHeight, depth);
     float y = edge > 0.5 ? 1.0 : max(0.02, baseline - height);
     o.position = float4(x * 2.0 - 1.0, 1.0 - y * 2.0, 0.0, 1.0);
     float colour = saturate((dbm - levels.z) / max(levels.w, 1.0));

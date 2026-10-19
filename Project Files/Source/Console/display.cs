@@ -1652,6 +1652,7 @@ namespace Thetis
         private static long panafall3DLeftEdge;
         private static long panafall3DRightEdge;
         private static bool panafall3DEnabled;
+        private static bool panafall3DClassic;
         private static bool? panafall3DLastTx;
         private static int panafall3DFrameCounter;
         private static int threeDFloor = 6;
@@ -1683,6 +1684,17 @@ namespace Thetis
             {
                 if (panafall3DEnabled == value) return;
                 panafall3DEnabled = value;
+                ResetPanafall3DHistory();
+            }
+        }
+
+        public static bool Panafall3DClassic
+        {
+            get { return panafall3DClassic; }
+            set
+            {
+                if (panafall3DClassic == value) return;
+                panafall3DClassic = value;
                 ResetPanafall3DHistory();
             }
         }
@@ -5117,7 +5129,8 @@ namespace Thetis
                     panafall3DCount++;
             }
 
-            if (!Draw3DHistoryGpu(verticalShift, width, height, gridMax, gridMin, transmitting))
+            if (panafall3DClassic ||
+                !Draw3DHistoryGpu(verticalShift, width, height, gridMax, gridMin, transmitting))
                 Draw3DStackedHistory(verticalShift, width, height,
                     gridMax, gridMin, fillBrush, transmitting);
         }
@@ -5188,7 +5201,8 @@ namespace Thetis
                 _d2dRenderTarget.Flush();
                 panafall3DGpu.Render(_d2dRenderTarget, width, height,
                     panafall3DHistory, panafall3DHead, panafall3DCount, palette,
-                    gridMin - threeDFloor, Math.Max(1f, gridMax - gridMin),
+                    panafall3DBaseline[panafall3DHead] - threeDFloor,
+                    Math.Max(1f, gridMax - gridMin),
                     gridMin, gridMax, threeDGain, threeDSpan,
                     opacity, line, gradientLine);
                 _d2dRenderTarget.DrawBitmap(panafall3DGpu.Bitmap,
