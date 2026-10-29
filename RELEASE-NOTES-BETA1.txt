@@ -1,64 +1,64 @@
 THETIS PY2ECM 2.10.4.1 BETA 1 (x64)
 ==================================
 
-Esta e uma versao de testes para Windows x64. O executavel distribuido e
-identico ao da versao Crisp aprovada localmente em 28/10/2026 (SHA-256:
+This is a Windows x64 test release. The distributed executable is identical
+to the locally approved 2.10.4.1 build from October 28, 2026 (SHA-256:
 B5E7822436BABAC047A1B19B815B4F9F9766AA6B967B4A6050D6E8A70F5DDC84).
-O pacote publico nao contem banco de dados, perfis, memorias, logs, BATs
-pessoais nem parametros da maquina do autor.
+The MSI and portable packages contain no personal database, profiles,
+memories, logs, machine-specific launch scripts, or author settings.
 
-DESTAQUES DESDE 2.10.3.16
+HIGHLIGHTS SINCE 2.10.3.16
 
-- Panadapter 3D e Panafall 3D renovados, com relevo, historico, contornos
-  de ruido e cores de sinais. Filtro RX, linha de dados e opcoes visuais
-  foram integrados aos modos 3D.
-- 3D Pan Classic e 3D PF Classic preservam a geometria e a aparencia do
-  desenho da 2.10.3.16 como opcoes separadas.
-- Cor e contraste do novo 3D acompanham o panadapter 2D; a crista frontal
-  ganhou destaque, e o fundo foi equilibrado com a frente.
-- Correcao do alinhamento vertical do relevo ao alterar a escala do
-  panadapter, do preenchimento 3D em trocas de modo e da reinicializacao
-  do renderizador 3D apos abrir ou trocar os modos de exibicao.
-- Reducao do espaco entre panadapter e waterfall no Panafall 3D.
-- Modo Ultrawide em Setup > Display > General, disponivel para monitores
-  ultrawide a partir de 2560 pixels. O espectro se estende para os dois
-  lados e os controles laterais passam para uma grade inferior alinhada.
-  Inclui ajustes de layout, controles de modo e posicao de sliders ao
-  alternar entre Ultrawide e layout normal.
-- Waterfall 2D e preenchimento do panadapter 2D renderizados na GPU.
-  O traco 2D usa caminho Crisp em lotes, priorizando definicao visual e
-  menor custo de CPU. O traco 2D inteiramente na GPU nao e o padrao.
-- Otimizacoes e instrumentacao de testes do analisador de display/WDSP.
-  A migracao integral do FFT ou processamento de audio para GPU nao esta
-  incluida: o caminho de audio permanece no CPU.
-- Defaults da versao Crisp incorporados ao aplicativo: visual 2D Crisp,
-  waterfall e preenchimento na GPU, cmASIO visivel, recepcao neural CW
-  ativada e banco isolado PY2ECM-WDSP210. Nao sao necessarias variaveis
-  de ambiente ou BAT para habilitar essas opcoes. Perfilamento e botoes
-  de teste ficam desativados por padrao.
+- Redesigned 3D Panadapter and 3D Panafall with terrain, history, noise-floor
+  contours, and signal colors. The RX filter overlay, data line, and visual
+  options are integrated into the 3D modes.
+- 3D Pan Classic and 3D PF Classic remain separate options preserving the
+  geometry and appearance of the 2.10.3.16 rendering.
+- The new 3D palette and contrast follow the 2D panadapter. The front ridge
+  is more visible, while the background is balanced against the foreground.
+- Fixed terrain alignment when changing panadapter levels, 3D fill after
+  mode switches, and renderer initialization when opening or changing
+  display modes.
+- Reduced the gap between panadapter and waterfall in 3D Panafall.
+- Added Ultrawide Mode in Setup > Display > General for ultrawide monitors
+  at least 2560 pixels wide. The spectrum expands to both sides, while side
+  controls move into an aligned bottom grid. Layout, mode controls, and
+  slider positions remain consistent when switching layouts.
+- The 2D waterfall and panadapter fill render on the GPU. The 2D trace uses
+  a batched path for definition and lower CPU cost; a fully GPU-based
+  2D trace is not the default.
+- Added display-analyzer and WDSP optimization and profiling facilities.
+  This release does not move the complete FFT or audio processing to the
+  GPU: the audio path remains on the CPU.
+- Display defaults are built into the application: high-definition 2D trace, GPU
+  waterfall and fill, visible cmASIO configuration, enabled neural CW
+  receive, and isolated PY2ECM-WDSP210 database identity. No environment
+  variables or BAT file are needed to enable these features. Profiling
+  and test controls are off by default.
 
-INSTALACAO
+INSTALLATION
 
-- MSI: instala em pasta propria, sem substituir a instalacao Thetis
-  principal nem a versao Crisp local. Nao inclui banco pessoal. Precisa
-  de .NET Framework 4.8 e dos drivers/runtimes usuais do equipamento.
-- ZIP portatil: extrair em pasta propria e iniciar Thetis.exe. A pasta
-  user-data inclusa mantem configuracoes isoladas ao lado do aplicativo.
-- Nao execute MSI e ZIP com o mesmo radio ao mesmo tempo. Antes de
-  conectar ou transmitir, confira dispositivo, audio, potencia, PA Gain,
-  PureSignal e demais preferencias. Faca copia do seu banco antes de
-  importar configuracoes de outras instalacoes.
+- MSI: installs in its own folder without replacing the main Thetis
+  installation or the local 2.10.4.1 build. It does not include a personal
+  database. Requires .NET Framework 4.8 and the usual device drivers and
+  runtimes for your radio and audio hardware.
+- Portable ZIP: extract to its own folder and start Thetis.exe. The included
+  user-data folder keeps settings beside the application.
+- Do not run the MSI and portable copies with the same radio simultaneously.
+  Before connecting or transmitting, check the device, audio, power,
+  PA Gain, PureSignal, and other settings. Back up your database before
+  importing settings from another installation.
 
-VALIDACAO E LIMITACOES
+VALIDATION AND LIMITATIONS
 
-- Codigo compilado em Release x64. O MSI foi montado com WiX 3.14; teste
-  de instalacao real e teste de RX/TX com radio ficam a cargo do QA.
-- O MSI nao e assinado digitalmente. Nao instala drivers externos.
-- Em algumas configuracoes, NR6 e cmASIO com blocos pequenos podem
-  produzir estalos no monitor de audio. Ajuste o Block Num conforme a
-  estabilidade do dispositivo; isso nao comprova defeito no sinal TX.
-- Ganhos de CPU/GPU dependem de resolucao, taxa de quadros, placa de
-  video e configuracoes. Nenhuma latencia de audio e garantida.
+- The code compiled in Release x64. The MSI was built with WiX 3.14;
+  real installation and radio RX/TX testing remain for QA.
+- The MSI is not digitally signed and does not install external drivers.
+- On some setups, NR6 and cmASIO with small blocks can cause clicks in
+  monitored audio. Adjust Block Num to suit the device's stability; this
+  alone does not establish a defect in the transmitted signal.
+- CPU/GPU gains depend on resolution, frame rate, graphics hardware, and
+  settings. No audio-latency improvement is guaranteed.
 
-Licencas do projeto e de terceiros acompanham o aplicativo. Esta e uma
-beta para avaliacao; nao ha garantia de funcionamento para transmissao.
+Project and third-party licenses accompany the application. This beta is
+for evaluation and carries no guarantee of transmission performance.
