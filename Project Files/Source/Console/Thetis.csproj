@@ -690,6 +690,10 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="ThreeDSpectrumGpu.cs" />
+    <Compile Include="PanFillGpu.cs" />
+    <Compile Include="WaterfallRowGpu.cs" />
+    <Compile Include="Console.Ultrawide.cs" />
+    <Compile Include="Console.GpuWaterfallTest.cs" />
     <Compile Include="WdspRuntimeProfiler.cs" />
     <Compile Include="DiversityForm.cs">
       <SubType>Form</SubType>

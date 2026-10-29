@@ -809,6 +809,8 @@ namespace Thetis
             // for resizing
             GrabConsoleSizeBasis();
             MinimumSize = this.Size;
+            InitializeUltrawideMode();
+            InitializeGpuWaterfallTestButton();
 
             LogTool.Completed("COMP");
 
@@ -1469,6 +1471,26 @@ namespace Thetis
         // ======================================================
         // Main
         // ======================================================
+        private static string[] AddCrispDefaults(string[] args)
+        {
+            var result = new List<string>(args);
+            if (!result.Any(a => a.StartsWith("-dbid:", StringComparison.OrdinalIgnoreCase)))
+                result.Add("-dbid:PY2ECM-WDSP210");
+            if (!result.Any(a => string.Equals(a, "-cmasioconfig", StringComparison.OrdinalIgnoreCase)))
+                result.Add("-cmasioconfig");
+            if (!result.Any(a => a.StartsWith("-datapath:", StringComparison.OrdinalIgnoreCase)))
+            {
+                string portableData = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "user-data");
+                string dataPath = Directory.Exists(portableData)
+                    ? portableData
+                    : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "OpenHPSDR", "Thetis-PY2ECM-Crisp-2.10.4.1");
+                Directory.CreateDirectory(dataPath);
+                result.Add("-datapath:" + dataPath);
+            }
+            return result.ToArray();
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -1486,6 +1508,8 @@ namespace Thetis
             {
                 if (showHelpInfo()) return;  // if we can show, instantly exit
             }
+
+            args = AddCrispDefaults(args);
 
             //[2.10.3.12]MW0LGE command line adaptor select
             if (Common.HasArg(args, "-adaptor"))
@@ -3390,6 +3414,7 @@ namespace Thetis
             List<string> wdsp210State = new List<string>();
             wdsp210State.Add("nr_selected/" + nr_selected_to_text());
             wdsp210State.Add("nr_selected_by_mode/" + nr_selected_by_mode_to_text());
+            wdsp210State.Add("ultrawide_mode/" + ultrawideMode.ToString().ToLowerInvariant());
             DB.SaveVars("PY2ECM_WDSP210", wdsp210State, true);
         }
 
@@ -5160,6 +5185,9 @@ namespace Thetis
                         break;
                     case "nr_selected_by_mode":
                         nr_selected_by_mode_from_text(vals[1]);
+                        break;
+                    case "ultrawide_mode":
+                        ultrawideMode = vals[1] == "true";
                         break;
                 }
             }
@@ -38020,6 +38048,7 @@ namespace Thetis
         {
             // MW0LGE changes made to this function so that RX1 meter fills space to right of VFOB box, also delay repaint until all controls moved
             SuspendDrawing(this); //MW0LGE
+            RestoreUltrawidePositions();
 
             // This routine captures the size and location parameters *after* windows
             // has resized the image, (if the video is set for "120 dpi" in lieu of the
@@ -38127,6 +38156,8 @@ namespace Thetis
             }
 
             setPAProfileLabelPos();  //[2.10.1.0] MW0LGE
+
+            ApplyUltrawideLayout();
 
             ResumeDrawing(this); //MW0LGE
         }

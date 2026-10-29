@@ -105,7 +105,8 @@ namespace Thetis
         // WDSP 2.10 NNR controls are created here instead of in the generated
         // designer file to keep the PY2ECM changes small and merge-friendly.
         private readonly NumericUpDownTS[,] nudNNR = new NumericUpDownTS[2, 7];
-        // Mode 0: 3D Pan; mode 1: 3D Panafall. Each unchecked option follows RX Display.
+        // Mode 0: all Classic 3D views; mode 1: all new 3D views.
+        // Keep the existing control names so saved appearance settings still load.
         private readonly CheckBoxTS[,] chk3DColorOverride = new CheckBoxTS[2, 2];
         private readonly ColorButton[,] clrbtn3DColor = new ColorButton[2, 2];
         private readonly TrackBarTS[,] tb3DColorAlpha = new TrackBarTS[2, 2];
@@ -135,6 +136,7 @@ namespace Thetis
             console = c;
             this.Owner = c;
 
+            InitializeUltrawideDisplayControl();
             Initialize3DDisplayColorControls();
             Initialize3DViewControls();
             InitializeNNRControls();
@@ -146,9 +148,45 @@ namespace Thetis
             //everything here moved to AfterConstructor, which is called during singleton instance // G7KLJ's idea/implementation
         }
 
+        private CheckBoxTS chkUltrawideDisplay;
+
+        private void InitializeUltrawideDisplayControl()
+        {
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = "grpUltrawideDisplay",
+                Text = "Ultrawide layout",
+                Location = new Point(394, 218),
+                Size = new Size(166, 72)
+            };
+            chkUltrawideDisplay = new CheckBoxTS
+            {
+                Name = "chkUltrawideDisplay",
+                Text = "Enable ultrawide mode",
+                Location = new Point(8, 20),
+                Size = new Size(150, 19)
+            };
+            group.Controls.Add(chkUltrawideDisplay);
+            tpDisplayGeneral.Controls.Add(group);
+            group.BringToFront();
+            toolTip1.SetToolTip(chkUltrawideDisplay,
+                "Available on ultrawide monitors of at least 2560 pixels wide.");
+            chkUltrawideDisplay.CheckedChanged += (sender, args) =>
+                console.UltrawideMode = chkUltrawideDisplay.Checked;
+            tcDisplay.SelectedIndexChanged += (sender, args) => RefreshUltrawideDisplayControl();
+            Shown += (sender, args) => RefreshUltrawideDisplayControl();
+        }
+
+        private void RefreshUltrawideDisplayControl()
+        {
+            if (chkUltrawideDisplay == null) return;
+            chkUltrawideDisplay.Enabled = console.UltrawideAvailable;
+            chkUltrawideDisplay.Checked = console.UltrawideMode;
+        }
+
         private void Initialize3DDisplayColorControls()
         {
-            string[] modes = { "3D Pan", "3D Panafall" };
+            string[] modes = { "3D Classic", "3D" };
             string[] suffixes = { "Pan", "Panafall" };
             string[] fields = { "Active Peak", "Data Line" };
             string[] fieldSuffixes = { "ActivePeak", "DataLine" };

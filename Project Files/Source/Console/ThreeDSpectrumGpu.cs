@@ -176,14 +176,15 @@ float4 fillPixel(Varying v) : SV_TARGET
 {
     int index = (int)round(saturate(v.lut) * 255.0);
     float3 rgb = Palette.Load(int3(index, 0, 0)).rgb;
-    rgb *= lerp(1.0, 0.88, v.depth);
-    float alpha = row.z * lerp(1.0, 0.70, v.depth);
+    // Repeated transparent rows otherwise build an over-contrasted backdrop.
+    // Keep the 2D palette unchanged and let distant layers contribute less.
+    float alpha = row.z * lerp(1.0, 0.18, v.depth);
     return float4(rgb * alpha, alpha);
 }
 
 float4 ridgePixel(Varying v) : SV_TARGET
 {
-    float alpha = row.w * lerp(1.0, 0.24, v.depth);
+    float alpha = row.w * lerp(1.0, 0.12, v.depth);
     int index = (int)round(saturate(v.lut) * 255.0);
     float3 lineColour = outline.w > 0.5 ? Palette.Load(int3(index, 0, 0)).rgb : outline.rgb;
     return float4(lineColour * alpha, alpha);

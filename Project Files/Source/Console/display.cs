@@ -1678,8 +1678,16 @@ namespace Thetis
         private static int threeDSpan = 100;
         private static ThreeDSpectrumGpu panafall3DGpu;
         private static bool panafall3DGpuUnavailable;
+        private static int panafall3DGpuRetryFrames;
+        private static int panafall3DGpuFailures;
         private static ThreeDSpectrumGpu panafall3DClassicGpu;
         private static bool panafall3DClassicGpuUnavailable;
+        private static PanFillGpu panFillGpu;
+        private static bool panFillGpuUnavailable;
+        private static bool panFillGpuValidated;
+        private static bool panTraceGpuUnavailable;
+        private static WaterfallRowGpu waterfallRowGpu;
+        private static bool waterfallRowGpuUnavailable;
 
         public static int ThreeDFloor
         {
@@ -1703,8 +1711,24 @@ namespace Thetis
             set
             {
                 if (panafall3DEnabled == value) return;
-                panafall3DEnabled = value;
-                ResetPanafall3DHistory();
+                lock (_objDX2Lock)
+                {
+                    panafall3DEnabled = value;
+                    ResetPanafall3DHistory();
+                    // Recreate the GPU terrain only when entering 3D again.
+                    // This also clears any transient failure from startup and
+                    // adds no work to the per-frame drawing path.
+                    if (panafall3DGpu != null)
+                    {
+                        panafall3DGpu.Dispose();
+                        panafall3DGpu = null;
+                    }
+                    panafall3DGpuUnavailable = false;
+                    panafall3DGpuRetryFrames = 0;
+                    panafall3DGpuFailures = 0;
+                    if (current_display_mode == DisplayMode.PANAFALL)
+                        ResetWaterfallBmp();
+                }
             }
         }
 
@@ -1714,8 +1738,35 @@ namespace Thetis
             set
             {
                 if (panafall3DClassic == value) return;
-                panafall3DClassic = value;
-                ResetPanafall3DHistory();
+                // Classic and the GPU terrain share the same PANAFALL mode.
+                // CurrentDisplayMode therefore does not clear buffers when
+                // switching directly between them, unlike a detour via 2D.
+                lock (_objDX2Lock)
+                {
+                    panafall3DClassic = value;
+                    ResetPanafall3DHistory();
+                    if (panafall3DGpu != null)
+                    {
+                        panafall3DGpu.Dispose();
+                        panafall3DGpu = null;
+                    }
+                    if (panafall3DClassicGpu != null)
+                    {
+                        panafall3DClassicGpu.Dispose();
+                        panafall3DClassicGpu = null;
+                    }
+                    panafall3DGpuUnavailable = false;
+                    panafall3DGpuRetryFrames = 0;
+                    panafall3DGpuFailures = 0;
+                    panafall3DClassicGpuUnavailable = false;
+
+                    if (_bDX2Setup && panafall3DEnabled && displayTargetWidth > 0)
+                    {
+                        clearBuffers(displayTargetWidth, 1);
+                        if (current_display_mode == DisplayMode.PANAFALL)
+                            ResetWaterfallBmp();
+                    }
+                }
             }
         }
 
@@ -2282,7 +2333,8 @@ namespace Thetis
                 }
             }
         }
-        // Optional RX appearance for the two 3D modes. Null follows the ordinary panadapter.
+        // Optional RX appearance: index 0 is Classic 3D, index 1 is new 3D.
+        // Null follows the ordinary panadapter.
         private static readonly Color?[] dataPeaks3DColors = new Color?[2];
         private static readonly Color?[] dataLine3DColors = new Color?[2];
         private static readonly SharpDX.Direct2D1.Brush[] dataPeaks3DBrushes = new SharpDX.Direct2D1.Brush[2];
@@ -3182,6 +3234,13 @@ namespace Thetis
 
         private static float _RX1waterfallPreviousMinValue = WATERFALL_AGC_RESTART_FLOOR_DBM;
         private static float _RX2waterfallPreviousMinValue = WATERFALL_AGC_RESTART_FLOOR_DBM;
+        private static int WaterfallTopMargin(int rx)
+        {
+            // The 3D Panafall already has a frequency scale above the panadapter.
+            // Keep the waterfall's separate 20-pixel scale for every other mode.
+            return rx == 1 && current_display_mode == DisplayMode.PANAFALL &&
+                   panafall3DEnabled ? 0 : 20;
+        }
         private static void ResetWaterfallBmp()
         {
             int H = displayTargetHeight;
@@ -3191,6 +3250,7 @@ namespace Thetis
 
             //override for splitter pos, when only one rx and it is panafall
             if (!_rx2_enabled && current_display_mode == DisplayMode.PANAFALL) H = displayTargetHeight - PanafallSplitBarPos;
+            int waterHeight = H - WaterfallTopMargin(1);
 
             lock (_objDX2Lock)
             {
@@ -3203,7 +3263,7 @@ namespace Thetis
                         if (displayTargetWidth == _waterfall_bmp_dx2d.Size.Width)
                         {
                             // make copy only if widths equal
-                            int h = Math.Min(H - 20, (int)_waterfall_bmp_dx2d.Size.Height);
+                            int h = Math.Min(waterHeight, (int)_waterfall_bmp_dx2d.Size.Height);
                             preservedRows = h;
 
                             tmp = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget, new Size2((int)_waterfall_bmp_dx2d.Size.Width, h),
@@ -3220,8 +3280,8 @@ namespace Thetis
                         _waterfall_bmp_dx2d = null;
                     }
                     Utilities.Dispose(ref _waterfall_scroll_dx2d);
-                    _waterfall_bmp_dx2d = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget, new Size2(displayTargetWidth, H - 20), new BitmapProperties(new SDXPixelFormat(_swapChain.Description.ModeDescription.Format, ALPHA_MODE)));
-                    clearWaterfallBitmapRegion(_waterfall_bmp_dx2d, 0, 0, displayTargetWidth, H - 20);
+                    _waterfall_bmp_dx2d = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget, new Size2(displayTargetWidth, waterHeight), new BitmapProperties(new SDXPixelFormat(_swapChain.Description.ModeDescription.Format, ALPHA_MODE)));
+                    clearWaterfallBitmapRegion(_waterfall_bmp_dx2d, 0, 0, displayTargetWidth, waterHeight);
 
                     if (tmp != null)
                     {
@@ -3234,7 +3294,7 @@ namespace Thetis
             }
 
             if (preservedRows > 0)
-                resizeWaterfallTimeOverlay(1, H - 20, preservedRows);
+                resizeWaterfallTimeOverlay(1, waterHeight, preservedRows);
             else
             {
             	resetWaterfallTimeOverlay(1);
@@ -3359,8 +3419,24 @@ namespace Thetis
                         panafall3DClassicGpu.Dispose();
                         panafall3DClassicGpu = null;
                     }
+                    if (panFillGpu != null)
+                    {
+                        panFillGpu.Dispose();
+                        panFillGpu = null;
+                    }
+                    if (waterfallRowGpu != null)
+                    {
+                        waterfallRowGpu.Dispose();
+                        waterfallRowGpu = null;
+                    }
                     panafall3DGpuUnavailable = false;
+                    panafall3DGpuRetryFrames = 0;
+                    panafall3DGpuFailures = 0;
                     panafall3DClassicGpuUnavailable = false;
+                    panFillGpuUnavailable = false;
+                    panFillGpuValidated = false;
+                    panTraceGpuUnavailable = false;
+                    waterfallRowGpuUnavailable = false;
                     if (_device != null && _device.ImmediateContext != null)
                     {
                         _device.ImmediateContext.ClearState();
@@ -3819,8 +3895,24 @@ namespace Thetis
                         panafall3DClassicGpu.Dispose();
                         panafall3DClassicGpu = null;
                     }
+                    if (panFillGpu != null)
+                    {
+                        panFillGpu.Dispose();
+                        panFillGpu = null;
+                    }
+                    if (waterfallRowGpu != null)
+                    {
+                        waterfallRowGpu.Dispose();
+                        waterfallRowGpu = null;
+                    }
                     panafall3DGpuUnavailable = false;
+                    panafall3DGpuRetryFrames = 0;
+                    panafall3DGpuFailures = 0;
                     panafall3DClassicGpuUnavailable = false;
+                    panFillGpuUnavailable = false;
+                    panFillGpuValidated = false;
+                    panTraceGpuUnavailable = false;
+                    waterfallRowGpuUnavailable = false;
                     Utilities.Dispose(ref _d2dRenderTarget);
                     Utilities.Dispose(ref _surface);
 
@@ -4023,8 +4115,41 @@ namespace Thetis
         private static bool _valid_fps_profile = false;
         private static double _last_valid_check = double.MinValue;
         private static int _dx_fail_retry = 0;
+        // Opt-out for comparing the batched trace with the original per-segment path.
+        private static readonly bool _legacyPanTrace =
+            Environment.GetEnvironmentVariable("THETIS_PAN_TRACE_LEGACY") == "1";
+        [ThreadStatic]
+        private static SharpDX.Mathematics.Interop.RawVector2[] _batchedPanTracePointsRx1;
+        [ThreadStatic]
+        private static SharpDX.Mathematics.Interop.RawVector2[] _batchedPanTracePointsRx2;
+        private static volatile bool _batchPanTraceEnabled =
+            Environment.GetEnvironmentVariable("THETIS_PAN_TRACE_BATCH") != "0";
+        public static bool BatchPanTraceEnabled
+        {
+            get { return _batchPanTraceEnabled; }
+            set { _batchPanTraceEnabled = value; }
+        }
+        private static volatile bool _gpuPanTraceEnabled =
+            Environment.GetEnvironmentVariable("THETIS_PAN_TRACE_GPU") == "1";
+        public static bool GpuPanTraceEnabled
+        {
+            get { return _gpuPanTraceEnabled; }
+            set { _gpuPanTraceEnabled = value; }
+        }
+        private static readonly bool _disableGpuPanFill =
+            Environment.GetEnvironmentVariable("THETIS_PAN_FILL_GPU") == "0";
+        private static volatile bool _disableGpuWaterfallRow =
+            Environment.GetEnvironmentVariable("THETIS_WATERFALL_GPU") == "0";
+        public static bool GpuWaterfallRowEnabled
+        {
+            get { return !_disableGpuWaterfallRow; }
+            set { _disableGpuWaterfallRow = !value; }
+        }
         public static void RenderDX2D()
         {
+            bool waterfallGpuSelected = GpuWaterfallRowEnabled;
+            long frameProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             try
             {
                 lock (_objDX2Lock)
@@ -4402,7 +4527,11 @@ namespace Thetis
                 jump:
                     try
                     {
-                        _d2dRenderTarget.EndDraw();
+                        long endDrawProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                            System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                        try { _d2dRenderTarget.EndDraw(); }
+                        finally { WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayEndDraw,
+                            endDrawProfileStart); }
                     }
                     catch (SharpDXException ex) when (ex.ResultCode == SharpDX.Direct2D1.ResultCode.RecreateTarget)
                     {
@@ -4420,7 +4549,10 @@ namespace Thetis
                     // however the gpu will error if it is busy doing something and the data can not be queued
                     // It will error and just ignore everything, we try present and ignore the 0x887A000A (was still drawing) error
                     PresentFlags pf = m_nVBlanks == 0 ? _NoVSYNCpresentFlag : PresentFlags.None;
+                    long presentProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                        System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     Result r = _swapChain1.TryPresent(m_nVBlanks, pf);
+                    WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPresent, presentProfileStart);
 
                     if (r != Result.Ok && !(
                         r == SharpDX.DXGI.ResultCode.WasStillDrawing/*0x887A000A*/ ||
@@ -4455,6 +4587,13 @@ namespace Thetis
             {
                 ShutdownDX2D();
                 MessageBox.Show("Problem in DirectX Renderer !" + System.Environment.NewLine + System.Environment.NewLine + "[ " + e.ToString() + " ]", "Thetis DirectX", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1, Common.MB_TOPMOST);
+            }
+            finally
+            {
+                WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayFrame, frameProfileStart);
+                WdspRuntimeProfiler.RecordDisplay(waterfallGpuSelected ?
+                    WdspRuntimeProfiler.DisplayFrameGpuSelected :
+                    WdspRuntimeProfiler.DisplayFrameCpuSelected, frameProfileStart);
             }
         }
         private static readonly List<int> _fps_profile_data = new List<int>();
@@ -5245,10 +5384,11 @@ namespace Thetis
                     panafall3DClassicCount++;
             }
 
-            if (!Draw3DHistoryClassicGpu(verticalShift, width, height,
-                gridMax, gridMin, fillBrush, transmitting))
-                Draw3DStackedHistoryClassic(verticalShift, width, height,
-                    gridMax, gridMin, fillBrush, transmitting);
+            // Classic deliberately uses the v2.10.3.16 Direct2D gradient brush.
+            // The GPU palette is indexed by dBm instead of screen position and
+            // changes the characteristic blue-to-warm depth colouring.
+            Draw3DStackedHistoryClassic(verticalShift, width, height,
+                gridMax, gridMin, fillBrush, transmitting);
         }
 
         private static bool Draw3DHistoryClassicGpu(int verticalShift, int width, int height,
@@ -5262,7 +5402,7 @@ namespace Thetis
                 if (panafall3DClassicGpu == null)
                     panafall3DClassicGpu = new ThreeDSpectrumGpu(_device,
                         Panafall3DClassicSamples, Panafall3DClassicRows);
-                int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+                int mode = 0; // Classic, with or without waterfall.
                 Color peak = dataPeaks3DColors[mode] ?? Color.FromArgb(240, 255, 65, 100);
                 Color tx = Color.FromArgb(215,
                     Math.Max(150, (int)data_fill_color_tx.R),
@@ -5304,7 +5444,7 @@ namespace Thetis
             float centreX = (width - 1f) / 2f;
             float dbRange = Math.Max(1f, gridMax - gridMin);
             bool useGradient = transmitting ? m_bUseLinearGradientTX : m_bUseLinearGradient;
-            int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+            int mode = 0; // Classic, with or without waterfall.
             SharpDX.Direct2D1.Brush terrainPeakBrush = !transmitting && dataPeaks3DBrushes[mode] != null ?
                 dataPeaks3DBrushes[mode] : m_bDX2_3DPeakBrush;
 
@@ -5397,13 +5537,22 @@ namespace Thetis
         private static bool Draw3DHistoryGpu(int verticalShift, int width, int height,
             int gridMax, int gridMin, bool transmitting)
         {
-            if (panafall3DGpuUnavailable || _device == null || _d2dRenderTarget == null ||
-                panafall3DCount == 0) return false;
+            if (_device == null || _d2dRenderTarget == null || panafall3DCount == 0)
+                return false;
+            if (panafall3DGpuUnavailable)
+            {
+                // DirectX resources can fail transiently while the window and
+                // device are starting up. Keep the software fallback for a short
+                // cooldown, then rebuild the GPU surface automatically instead
+                // of requiring a manual 2D -> 3D mode switch.
+                if (panafall3DGpuRetryFrames-- > 0) return false;
+                panafall3DGpuUnavailable = false;
+            }
             try
             {
                 if (panafall3DGpu == null)
                     panafall3DGpu = new ThreeDSpectrumGpu(_device, Panafall3DSamples, Panafall3DRows);
-                int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+                int mode = 1; // New 3D, with or without waterfall.
                 Color line = transmitting ? tx_data_line_color :
                     (dataLine3DColors[mode] ?? data_line_color);
                 bool gradientLine = transmitting ?
@@ -5424,12 +5573,19 @@ namespace Thetis
                 _d2dRenderTarget.DrawBitmap(panafall3DGpu.Bitmap,
                     new SharpDX.RectangleF(0, verticalShift, width, height),
                     1f, BitmapInterpolationMode.Linear);
+                panafall3DGpuRetryFrames = 0;
+                panafall3DGpuFailures = 0;
                 return true;
             }
             catch (Exception error)
             {
                 System.Diagnostics.Debug.WriteLine("3D GPU renderer disabled: " + error);
                 panafall3DGpuUnavailable = true;
+                // Retry promptly after a startup race, then back off if the
+                // failure persists. This work only runs on the failure path.
+                panafall3DGpuFailures = Math.Min(panafall3DGpuFailures + 1, 5);
+                panafall3DGpuRetryFrames = Math.Min(60,
+                    3 << (panafall3DGpuFailures - 1));
                 if (panafall3DGpu != null)
                 {
                     panafall3DGpu.Dispose();
@@ -5446,7 +5602,7 @@ namespace Thetis
         {
             float centreX = (width - 1f) / 2f;
             float dbRange = Math.Max(1f, gridMax - gridMin);
-            int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+            int mode = 1; // New 3D, with or without waterfall.
             SharpDX.Direct2D1.Brush terrainPeakBrush = !transmitting && dataPeaks3DBrushes[mode] != null ?
                 dataPeaks3DBrushes[mode] : m_bDX2_3DPeakBrush;
 
@@ -5556,12 +5712,149 @@ namespace Thetis
             brush.Opacity = originalOpacity;
         }
 
-        unsafe static private bool DrawPanadapterDX2D(int nVerticalShift, int W, int H, int rx, bool bottom)
+        private static bool TryDrawGpuPanFill(int verticalShift, int width, int height,
+            float[] data, int columns, int decimation, int gridMax, float offset,
+            float dbmToPixel, SharpDX.Direct2D1.Brush fillBrush)
         {
+            if (_disableGpuPanFill || panFillGpuUnavailable || _device == null ||
+                _d2dRenderTarget == null || columns < 1 || width < 2 || height < 2)
+                return false;
+            try
+            {
+                if (panFillGpu == null) panFillGpu = new PanFillGpu(_device);
+                _d2dRenderTarget.Flush();
+                panFillGpu.Render(_d2dRenderTarget, width, height, data, columns,
+                    decimation, gridMax, offset, dbmToPixel);
+                AntialiasMode previousAntialias = _d2dRenderTarget.AntialiasMode;
+                try
+                {
+                    _d2dRenderTarget.AntialiasMode = AntialiasMode.Aliased;
+                    _d2dRenderTarget.FillOpacityMask(panFillGpu.Bitmap, fillBrush,
+                        OpacityMaskContent.Graphics,
+                        new SharpDX.RectangleF(0, verticalShift, width, verticalShift + height),
+                        new SharpDX.RectangleF(0, 0, width, height));
+                    if (!panFillGpuValidated)
+                    {
+                        _d2dRenderTarget.Flush();
+                        panFillGpuValidated = true;
+                    }
+                }
+                finally
+                {
+                    _d2dRenderTarget.AntialiasMode = previousAntialias;
+                }
+                return true;
+            }
+            catch (Exception error)
+            {
+                System.Diagnostics.Debug.WriteLine("GPU pan fill disabled: " + error);
+                panFillGpuUnavailable = true;
+                if (panFillGpu != null)
+                {
+                    panFillGpu.Dispose();
+                    panFillGpu = null;
+                }
+                return false;
+            }
+        }
+
+        private static bool TryDrawGpuPanTrace(int verticalShift, int width, int height,
+            float[] data, int columns, int decimation, int gridMax, float offset,
+            float dbmToPixel, float lineWidth, SharpDX.Direct2D1.Brush lineBrush)
+        {
+            if (panTraceGpuUnavailable || _device == null || _d2dRenderTarget == null ||
+                columns < 2 || width < 2 || height < 2 || lineWidth <= 0f)
+                return false;
+            try
+            {
+                if (panFillGpu == null) panFillGpu = new PanFillGpu(_device);
+                _d2dRenderTarget.Flush();
+                panFillGpu.RenderTrace(_d2dRenderTarget, width, height, data, columns,
+                    decimation, gridMax, offset, dbmToPixel, lineWidth);
+                AntialiasMode previousAntialias = _d2dRenderTarget.AntialiasMode;
+                try
+                {
+                    _d2dRenderTarget.AntialiasMode = AntialiasMode.Aliased;
+                    _d2dRenderTarget.FillOpacityMask(panFillGpu.TraceBitmap, lineBrush,
+                        OpacityMaskContent.Graphics,
+                        new SharpDX.RectangleF(0, verticalShift, width, verticalShift + height),
+                        new SharpDX.RectangleF(0, 0, width, height));
+                }
+                finally
+                {
+                    _d2dRenderTarget.AntialiasMode = previousAntialias;
+                }
+                return true;
+            }
+            catch (Exception error)
+            {
+                System.Diagnostics.Debug.WriteLine("GPU pan trace disabled: " + error);
+                panTraceGpuUnavailable = true;
+                return false;
+            }
+        }
+
+        private static bool TryDrawGpuWaterfallRow(SharpDX.Direct2D1.Bitmap destination,
+            int width, float[] samples, int columns, int decimation,
+            float low, float high, Color lowColor, ColorScheme scheme,
+            Color[] customPalette)
+        {
+            if (_disableGpuWaterfallRow || waterfallRowGpuUnavailable || _device == null ||
+                _d2dRenderTarget == null || destination == null ||
+                columns < 1 || width < 2 || decimation < 1 ||
+                (scheme != ColorScheme.enhanced && scheme != ColorScheme.Custom) ||
+                (scheme == ColorScheme.Custom &&
+                    (customPalette == null || customPalette.Length < 101)))
+                return false;
+            try
+            {
+                if (waterfallRowGpu == null)
+                    waterfallRowGpu = new WaterfallRowGpu(_device);
+                _d2dRenderTarget.Flush();
+                waterfallRowGpu.Render(_d2dRenderTarget, width, samples, columns,
+                    decimation, low, high, lowColor,
+                    scheme == ColorScheme.Custom ? customPalette : null);
+                destination.CopyFromBitmap(waterfallRowGpu.Bitmap,
+                    new SharpDX.Point(0, 0), new SharpDX.Rectangle(0, 0, width, 1));
+                return true;
+            }
+            catch (Exception error)
+            {
+                System.Diagnostics.Debug.WriteLine("GPU waterfall row disabled: " + error);
+                waterfallRowGpuUnavailable = true;
+                if (waterfallRowGpu != null)
+                {
+                    waterfallRowGpu.Dispose();
+                    waterfallRowGpu = null;
+                }
+                return false;
+            }
+        }
+
+        private static bool DrawPanadapterDX2D(int nVerticalShift, int W, int H, int rx, bool bottom)
+        {
+            bool waterfallGpuSelected = GpuWaterfallRowEnabled;
+            long start = WdspRuntimeProfiler.DisplayEnabled ?
+                System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            try { return DrawPanadapterDX2DCore(nVerticalShift, W, H, rx, bottom); }
+            finally
+            {
+                WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPan, start);
+                WdspRuntimeProfiler.RecordDisplay(waterfallGpuSelected ?
+                    WdspRuntimeProfiler.DisplayPanGpuSelected :
+                    WdspRuntimeProfiler.DisplayPanCpuSelected, start);
+            }
+        }
+
+        unsafe static private bool DrawPanadapterDX2DCore(int nVerticalShift, int W, int H, int rx, bool bottom)
+        {
+            long gridProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             //if (grid_control) //[2.10.3.9]MW0LGE raw grid control option now just turns off the grid, all other elements are shown
             //{
                 int centre_x = drawPanadapterAndWaterfallGridDX2D(nVerticalShift, W, H, rx, bottom, out long left_edge, out long right_edge, false);
             //}
+            WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanGrid, gridProfileStart);
 
             float local_max_y = float.MinValue;
             float local_max_x = float.MinValue;
@@ -5751,7 +6044,7 @@ namespace Thetis
                 (current_display_mode == DisplayMode.PANADAPTER ||
                  current_display_mode == DisplayMode.PANAFALL))
             {
-                int mode = current_display_mode == DisplayMode.PANAFALL ? 1 : 0;
+                int mode = panafall3DClassic ? 0 : 1;
                 if (dataLine3DBrushes[mode] != null) lineBrush = dataLine3DBrushes[mode];
                 if (dataPeaks3DBrushes[mode] != null) fillPeaksBrush = dataPeaks3DBrushes[mode];
             }
@@ -5840,9 +6133,28 @@ namespace Thetis
                      (rx == 2 && txOnRX2 && local_mox));
                 if (draw3D)
                 {
+                    long threeDProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                        System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     DrawPanafall3DHistory(nVerticalShift, W, H, nDecimatedWidth,
                         data, fOffset, grid_max, grid_min, left_edge, right_edge,
                         fresh3DFrame, fillBrush, local_mox);
+                    WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPan3D,
+                        threeDProfileStart);
+
+                    // The 3D surface covers the filter tint drawn by the grid. Restore
+                    // the RX filter on top of the surface using the configured brush.
+                    if (!local_mox && m_bDX2_display_filter_brush != null)
+                    {
+                        int filterLeft, filterRight;
+                        getFilterXPositions(rx, W, local_mox, displayduplex,
+                            out filterLeft, out filterRight);
+                        int filterTop = rx == 1 ? spectrum_grid_step : rx2_spectrum_grid_step;
+                        if (split_display) filterTop *= 2;
+                        filterTop = (int)((double)filterTop * H / Math.Max(1, yRange));
+                        drawFilterOverlayDX2D(m_bDX2_display_filter_brush,
+                            filterLeft, filterRight, W, H, rx,
+                            filterTop, bottom, nVerticalShift);
+                    }
                 }
 
                 float averageSum = 0;
@@ -5856,6 +6168,44 @@ namespace Thetis
                 double local_frame_start = m_dElapsedFrameStart;
                 //
 
+                long traceProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                    System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                bool gpuPanTraceRequested = !draw3D && !_legacyPanTrace && GpuPanTraceEnabled &&
+                    !panTraceGpuUnavailable;
+                bool batchPanTrace = !_legacyPanTrace && (BatchPanTraceEnabled || gpuPanTraceRequested);
+                SharpDX.Mathematics.Interop.RawVector2[] batchedTracePoints = null;
+                if (batchPanTrace)
+                {
+                    batchedTracePoints = rx == 1 ? _batchedPanTracePointsRx1 : _batchedPanTracePointsRx2;
+                    if (batchedTracePoints == null || batchedTracePoints.Length != nDecimatedWidth)
+                    {
+                        batchedTracePoints = new SharpDX.Mathematics.Interop.RawVector2[nDecimatedWidth];
+                        if (rx == 1) _batchedPanTracePointsRx1 = batchedTracePoints;
+                        else _batchedPanTracePointsRx2 = batchedTracePoints;
+                    }
+                }
+                bool gpuPanFillDrawn = false;
+                if (pan_fill)
+                {
+                    long gpuFillProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                        System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                    gpuPanFillDrawn = TryDrawGpuPanFill(nVerticalShift, W, H,
+                        data, nDecimatedWidth, local_Decimation, grid_max,
+                        fOffset, dbmToPixel, fillBrush);
+                    WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanGpuFill,
+                        gpuFillProfileStart);
+                }
+                SharpDX.Direct2D1.PathGeometry traceGeometry = null;
+                SharpDX.Direct2D1.GeometrySink traceSink = null;
+                if (!_legacyPanTrace && !gpuPanTraceRequested)
+                {
+                    traceGeometry = new SharpDX.Direct2D1.PathGeometry(_d2dRenderTarget.Factory);
+                    traceSink = traceGeometry.Open();
+                    traceSink.BeginFigure(previousPoint, SharpDX.Direct2D1.FigureBegin.Hollow);
+                }
+                bool gpuPanTraceDrawn = false;
+                try
+                {
                 for (int i = 0; i < nDecimatedWidth; i++)
                 {
                     point.X = i * local_Decimation;
@@ -5930,7 +6280,7 @@ namespace Thetis
                     }
 
                     //pana fill
-                    if (pan_fill)
+                    if (pan_fill && !gpuPanFillDrawn)
                     {
                         // draw vertical line, this is so much faster than FillGeometry as the geo created would be so complex any fill alogorthm would struggle
                         bottomPoint.X = point.X;
@@ -5974,6 +6324,13 @@ namespace Thetis
 
                     // ignore point if same Y as last point
                     // lines will get longer if flat, reducing number of total points
+                    if (batchPanTrace)
+                    {
+                        // A straight horizontal run is unchanged visually; sending all
+                        // points at once avoids one managed/native call per column.
+                        batchedTracePoints[i] = new SharpDX.Mathematics.Interop.RawVector2(point.X, point.Y);
+                        continue;
+                    }
                     bool isInteriorDuplicate = (i > 0 && i < nDecimatedWidth - 1) && point.Y == previousPoint.Y;
                     if (isInteriorDuplicate)
                     {
@@ -5983,13 +6340,51 @@ namespace Thetis
                     }
                     if (bIgnoringPoints)
                     {
-                        _d2dRenderTarget.DrawLine(previousPoint, lastIgnoredPoint, lineBrush, line_width);
+                        if (_legacyPanTrace)
+                            _d2dRenderTarget.DrawLine(previousPoint, lastIgnoredPoint, lineBrush, line_width);
+                        else
+                            traceSink.AddLine(lastIgnoredPoint);
                         previousPoint = lastIgnoredPoint;
                         bIgnoringPoints = false;
                     }
-                    _d2dRenderTarget.DrawLine(previousPoint, point, lineBrush, line_width);
+                    if (_legacyPanTrace)
+                        _d2dRenderTarget.DrawLine(previousPoint, point, lineBrush, line_width);
+                    else
+                        traceSink.AddLine(point);
                     previousPoint = point;
                 }
+                gpuPanTraceDrawn = gpuPanTraceRequested && TryDrawGpuPanTrace(
+                    nVerticalShift, W, H, data, nDecimatedWidth, local_Decimation,
+                    grid_max, fOffset, dbmToPixel, line_width, lineBrush);
+                if (!gpuPanTraceDrawn && traceSink == null && batchPanTrace)
+                {
+                    traceGeometry = new SharpDX.Direct2D1.PathGeometry(_d2dRenderTarget.Factory);
+                    traceSink = traceGeometry.Open();
+                    traceSink.BeginFigure(previousPoint, SharpDX.Direct2D1.FigureBegin.Hollow);
+                }
+                if (traceSink != null)
+                {
+                    if (batchPanTrace)
+                        traceSink.AddLines(batchedTracePoints);
+                    traceSink.EndFigure(SharpDX.Direct2D1.FigureEnd.Open);
+                    traceSink.Close();
+                    _d2dRenderTarget.DrawGeometry(traceGeometry, lineBrush, line_width);
+                }
+                }
+                finally
+                {
+                    if (traceSink != null) traceSink.Dispose();
+                    if (traceGeometry != null) traceGeometry.Dispose();
+                }
+                WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanTrace,
+                    traceProfileStart);
+                WdspRuntimeProfiler.RecordDisplay(gpuPanTraceDrawn
+                    ? WdspRuntimeProfiler.DisplayPanTraceGpuSelected
+                    : batchPanTrace ? WdspRuntimeProfiler.DisplayPanTraceBatchSelected
+                                    : WdspRuntimeProfiler.DisplayPanTraceCurrentSelected,
+                    traceProfileStart);
+                long overlaysProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                    System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 
                 //noise floor
                 if (!local_mox)
@@ -6331,6 +6726,8 @@ namespace Thetis
                         nVerticalShift + H, grid_zero_pen.Width);
 
                 _d2dRenderTarget.PopAxisAlignedClip();
+                WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanOverlays,
+                    overlaysProfileStart);
             }
 
             if (!bottom)
@@ -6705,7 +7102,8 @@ namespace Thetis
         {
             if (m_eShowWaterfallTime == WaterfallTimePosition.NONE) return;
 
-            int waterHeight = H - 20;
+            int topMargin = WaterfallTopMargin(rx);
+            int waterHeight = H - topMargin;
             if (waterHeight <= 8) return;
 
             int i = rx - 1;
@@ -6720,7 +7118,7 @@ namespace Thetis
             const float textPaddingY = 2f;
             const float cornerRadius = 4f;
 
-            float waterfallTop = nVerticalShift + 20f;
+            float waterfallTop = nVerticalShift + topMargin;
             float waterfallBottom = waterfallTop + waterHeight;
 
             SharpDX.Direct2D1.Brush timeBrush = getDXBrushForColour(m_cWaterfallTimeColour, 255);
@@ -6967,7 +7365,22 @@ namespace Thetis
         private static bool _stopRx2Waterfall = false;
         private static DateTime _rx1_centrefreq_change_time = DateTime.UtcNow;
         private static DateTime _rx2_centrefreq_change_time = DateTime.UtcNow;
-        unsafe static private bool DrawWaterfallDX2D(int nVerticalShift, int W, int H, int rx, bool bottom)
+        private static bool DrawWaterfallDX2D(int nVerticalShift, int W, int H, int rx, bool bottom)
+        {
+            bool waterfallGpuSelected = GpuWaterfallRowEnabled;
+            long start = WdspRuntimeProfiler.DisplayEnabled ?
+                System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            try { return DrawWaterfallDX2DCore(nVerticalShift, W, H, rx, bottom); }
+            finally
+            {
+                WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayWaterfall, start);
+                WdspRuntimeProfiler.RecordDisplay(waterfallGpuSelected ?
+                    WdspRuntimeProfiler.DisplayWaterfallGpuSelected :
+                    WdspRuntimeProfiler.DisplayWaterfallCpuSelected, start);
+            }
+        }
+
+        unsafe static private bool DrawWaterfallDX2DCore(int nVerticalShift, int W, int H, int rx, bool bottom)
         {
             bool addRow;
 
@@ -7172,6 +7585,8 @@ namespace Thetis
 
                 if (bRXdraw)
                 {
+                    long waterfallPrepareStart = WdspRuntimeProfiler.DisplayEnabled ?
+                        System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     float[] data;
                     float[] dataCopy;
 
@@ -7213,6 +7628,12 @@ namespace Thetis
                     {
                         max = data[i] + fOffset;
                         max_copy = dataCopy[i] + fOffset;
+
+                        // Also needed when colour mapping runs on the GPU: AGC still
+                        // follows the original, un-notched spectrum on the CPU.
+                        if ((cScheme == ColorScheme.enhanced || cScheme == ColorScheme.Custom) &&
+                            max_copy < waterfall_minimum)
+                            waterfall_minimum = max_copy;
 
                         // noise floor
                         if (!local_mox && (max_copy < currentAverage))
@@ -7272,7 +7693,6 @@ namespace Thetis
                     if (_waterfallRowBuffers[rowIndex].Length != W * pixel_size)
                         _waterfallRowBuffers[rowIndex] = new byte[W * pixel_size];
                     byte[] row = _waterfallRowBuffers[rowIndex];
-                    Array.Clear(row, 0, row.Length);
 
                     SharpDX.Direct2D1.Bitmap waterfallBitmap;
                     SharpDX.Direct2D1.Bitmap topPixels;
@@ -7316,6 +7736,27 @@ namespace Thetis
                     if (preservedBitmapHeight > 0)
                         topPixels.CopyFromBitmap(waterfallBitmap, new SharpDX.Point(0, 0),
                             new SharpDX.Rectangle(0, 0, (int)waterfallBitmap.Size.Width, preservedBitmapHeight));
+
+                    bool stopWaterfallOnTx = (rx == 1 && m_bStopRX1WaterfallOnTX && local_mox) ||
+                                             (rx == 2 && m_bStopRX2WaterfallOnTX && local_mox);
+                    Color[] customPalette = null;
+                    if (cScheme == ColorScheme.Custom)
+                    {
+                        if (local_mox)
+                            customPalette = _tx_waterfall_grad_ok ? _tx_waterfall_grad : null;
+                        else if (rx == 1)
+                            customPalette = _rx1_waterfall_grad_ok ? _rx1_waterfall_grad : null;
+                        else
+                            customPalette = _rx2_waterfall_grad_ok ? _rx2_waterfall_grad : null;
+                    }
+                    bool gpuWaterfallRowDrawn = addRow && !stopWaterfallOnTx &&
+                        TryDrawGpuWaterfallRow(waterfallBitmap, W, waterfall_data,
+                            nDecimatedWidth, m_nDecimation, low_threshold,
+                            high_threshold, low_color, cScheme, customPalette);
+
+                    if (addRow && !stopWaterfallOnTx && !gpuWaterfallRowDrawn)
+                    {
+                    Array.Clear(row, 0, row.Length);
 
                     #region colours
                     switch (cScheme)
@@ -8227,15 +8668,22 @@ namespace Thetis
                             row[((i * m_nDecimation) + j) * pixel_size + 3] = row[(i * m_nDecimation) * pixel_size + 3];
                         }
                     }
+                    }
 
-                    bool stopWaterfallOnTx = (rx == 1 && m_bStopRX1WaterfallOnTX && local_mox) ||
-                                             (rx == 2 && m_bStopRX2WaterfallOnTX && local_mox);
+                    WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayWaterfallPrepare,
+                        waterfallPrepareStart);
 
                     if (!stopWaterfallOnTx)
                     {
                         if (addRow)
                         {
-                            waterfallBitmap.CopyFromMemory(row, W * pixel_size, new SharpDX.Rectangle(0, 0, W, 1));
+                            long uploadStart = WdspRuntimeProfiler.DisplayEnabled ?
+                                System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                            if (!gpuWaterfallRowDrawn)
+                                waterfallBitmap.CopyFromMemory(row, W * pixel_size,
+                                    new SharpDX.Rectangle(0, 0, W, 1));
+                            WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayWaterfallUpload,
+                                uploadStart);
                         }
 
                         int copyWidth = W - Math.Abs(horizontalShiftPixels);
@@ -8261,7 +8709,7 @@ namespace Thetis
                             clearWaterfallBitmapRegion(waterfallBitmap, 0, shiftedRowTop, W, preservedBitmapHeight);
                         }
 
-                        if (addRow) recordWaterfallAdvance(rx, H - 20);
+                        if (addRow) recordWaterfallAdvance(rx, H - WaterfallTopMargin(rx));
                     }
 
                     bool bIgnoreAgc = (rx == 1 && _ignore_waterfall_rx1_agc && (_high_perf_timer.ElapsedMsec < _rx1_no_agc_duration)) ||
@@ -8318,11 +8766,11 @@ namespace Thetis
 
                 if (rx == 1)
                 {
-                    _d2dRenderTarget.DrawBitmap(_waterfall_bmp_dx2d, new RectangleF(0, nVerticalShift + 20, _waterfall_bmp_dx2d.Size.Width, _waterfall_bmp_dx2d.Size.Height), m_fRX1WaterfallOpacity, BitmapInterpolationMode.Linear);
+                    _d2dRenderTarget.DrawBitmap(_waterfall_bmp_dx2d, new RectangleF(0, nVerticalShift + WaterfallTopMargin(rx), _waterfall_bmp_dx2d.Size.Width, _waterfall_bmp_dx2d.Size.Height), m_fRX1WaterfallOpacity, BitmapInterpolationMode.Linear);
                 }
                 else
                 {
-                    _d2dRenderTarget.DrawBitmap(_waterfall_bmp2_dx2d, new RectangleF(0, nVerticalShift + 20, _waterfall_bmp2_dx2d.Size.Width, _waterfall_bmp2_dx2d.Size.Height), m_fRX2WaterfallOpacity, BitmapInterpolationMode.Linear);
+                    _d2dRenderTarget.DrawBitmap(_waterfall_bmp2_dx2d, new RectangleF(0, nVerticalShift + WaterfallTopMargin(rx), _waterfall_bmp2_dx2d.Size.Width, _waterfall_bmp2_dx2d.Size.Height), m_fRX2WaterfallOpacity, BitmapInterpolationMode.Linear);
                 }
             }
 
@@ -9631,7 +10079,7 @@ namespace Thetis
             int h_steps = (grid_max - grid_min) / grid_step;
             int top;
 
-            if (bIsWaterfall) top = 20; //change top so that the filter gap doesnt change, inore grid spacing
+            if (bIsWaterfall) top = WaterfallTopMargin(rx);
             else top = (int)((double)grid_step * H / y_range); // top is based on grid spacing
 
             //-- [2.10.1.0] MW0LGE fix for when split and dup is off. Note dupe always off for rx2
@@ -10115,7 +10563,7 @@ namespace Thetis
                         }
                     }
 
-                    if (_show_frequency_numbers)
+                    if (_show_frequency_numbers && !(bIsWaterfall && top == 0))
                     {
                         if (((double)((int)(actual_fgrid * 1000))) == actual_fgrid * 1000)
                         {
@@ -10155,7 +10603,8 @@ namespace Thetis
                     label = fgrid.ToString();
                     offsetL = (int)((label.Length + 1) * 4.1);
                     offsetR = (int)(label.Length * 4.1);
-                    if ((vgrid - offsetL >= 0) && (vgrid + offsetR < W) && (fgrid != 0))
+                    if ((vgrid - offsetL >= 0) && (vgrid + offsetR < W) && (fgrid != 0) &&
+                        !(bIsWaterfall && top == 0))
                     {
                         SharpDX.Direct2D1.Brush brBrush = local_mox ? m_bDX2_grid_tx_text_brush : m_bDX2_grid_text_brush;
 

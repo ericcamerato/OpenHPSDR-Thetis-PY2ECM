@@ -1898,9 +1898,9 @@ namespace Thetis
 #endif
             //MW0LGE moved here  from loadalpha
             cbMorse.SelectedIndex = 0;
-            // Opt-in for launchers that should start CW receive decoding automatically.
-            if (Array.Exists(Environment.GetCommandLineArgs(), arg =>
-                string.Equals(arg, "-neuralcwrx", StringComparison.OrdinalIgnoreCase)))
+            // Crisp build starts neural CW receive decoding without launcher arguments.
+            if (!Array.Exists(Environment.GetCommandLineArgs(), arg =>
+                string.Equals(arg, "-noneuralcwrx", StringComparison.OrdinalIgnoreCase)))
                 neuralRxEnabled.Checked = true;
         }
         private void CWX_Closing(object sender, System.ComponentModel.CancelEventArgs e)
