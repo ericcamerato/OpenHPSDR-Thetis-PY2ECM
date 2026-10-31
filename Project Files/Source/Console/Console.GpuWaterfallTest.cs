@@ -9,6 +9,7 @@ namespace Thetis
         private ButtonTS btnGpuWaterfallTest;
         private bool traceTestButton;
         private bool gpuTraceTestButton;
+        private bool fillReuseTestButton;
 
         private void InitializeGpuWaterfallTestButton()
         {
@@ -17,6 +18,7 @@ namespace Thetis
                 return;
             traceTestButton = Environment.GetEnvironmentVariable("THETIS_TRACE_TEST_BUTTON") == "1";
             gpuTraceTestButton = Environment.GetEnvironmentVariable("THETIS_GPU_TRACE_TEST_BUTTON") == "1";
+            fillReuseTestButton = Environment.GetEnvironmentVariable("THETIS_FILL_REUSE_TEST_BUTTON") == "1";
 
             int top = chkFWCATU.Bottom + 1;
             btnGpuWaterfallTest = new ButtonTS
@@ -29,7 +31,10 @@ namespace Thetis
             };
             btnGpuWaterfallTest.Click += (sender, args) =>
             {
-                if (gpuTraceTestButton)
+                if (fillReuseTestButton)
+                    Display.ReuseGpuPanFillOnDuplicateFrame =
+                        !Display.ReuseGpuPanFillOnDuplicateFrame;
+                else if (gpuTraceTestButton)
                     Display.GpuPanTraceEnabled = !Display.GpuPanTraceEnabled;
                 else if (traceTestButton)
                     Display.BatchPanTraceEnabled = !Display.BatchPanTraceEnabled;
@@ -45,6 +50,15 @@ namespace Thetis
         private void UpdateGpuWaterfallTestButton()
         {
             if (btnGpuWaterfallTest == null) return;
+            if (fillReuseTestButton)
+            {
+                bool reuse = Display.ReuseGpuPanFillOnDuplicateFrame;
+                btnGpuWaterfallTest.Text = reuse ? "TESTE REUSO" : "TESTE NORMAL";
+                toolTip1.SetToolTip(btnGpuWaterfallTest,
+                    reuse ? "Reutiliza a mascara GPU quando o espectro nao mudou. Clique para desativar."
+                          : "Recalcula a mascara GPU em todo quadro. Clique para testar o reuso.");
+                return;
+            }
             if (gpuTraceTestButton)
             {
                 bool gpuTrace = Display.GpuPanTraceEnabled;

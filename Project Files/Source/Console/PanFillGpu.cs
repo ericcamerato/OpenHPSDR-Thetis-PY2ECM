@@ -153,6 +153,13 @@ float4 strokeMask(StrokeVertex input) : SV_TARGET
         private int outputHeight;
         private int traceWidth;
         private int traceHeight;
+        private bool fillReady;
+        private float[] fillData;
+        private int fillColumns;
+        private int fillDecimation;
+        private int fillGridMax;
+        private float fillOffset;
+        private float fillDbmToPixel;
 
         internal SharpDX.Direct2D1.Bitmap Bitmap { get { return outputBitmap; } }
         internal SharpDX.Direct2D1.Bitmap TraceBitmap { get { return traceBitmap; } }
@@ -245,6 +252,7 @@ float4 strokeMask(StrokeVertex input) : SV_TARGET
         private void EnsureOutput(SharpDX.Direct2D1.RenderTarget target, int width, int height)
         {
             if (outputBitmap != null && outputWidth == width && outputHeight == height) return;
+            fillReady = false;
             if (outputBitmap != null) outputBitmap.Dispose();
             if (outputView != null) outputView.Dispose();
             if (outputTexture != null) outputTexture.Dispose();
@@ -271,6 +279,16 @@ float4 strokeMask(StrokeVertex input) : SV_TARGET
                         SharpDX.Direct2D1.AlphaMode.Premultiplied));
                 outputBitmap = new SharpDX.Direct2D1.Bitmap(target, surface, properties);
             }
+        }
+
+        internal bool CanReuseFill(int width, int height, float[] data, int columns,
+            int decimation, int gridMax, float offset, float dbmToPixel)
+        {
+            return fillReady && outputBitmap != null && outputWidth == width &&
+                outputHeight == height && ReferenceEquals(fillData, data) &&
+                fillColumns == columns && fillDecimation == decimation &&
+                fillGridMax == gridMax && fillOffset == offset &&
+                fillDbmToPixel == dbmToPixel;
         }
 
         private void EnsureTraceOutput(SharpDX.Direct2D1.RenderTarget target, int width, int height)
@@ -363,6 +381,7 @@ float4 strokeMask(StrokeVertex input) : SV_TARGET
             float[] data, int columns, int decimation, int gridMax, float offset,
             float dbmToPixel)
         {
+            fillReady = false;
             EnsureSamples(columns);
             EnsureOutput(target, width, height);
             DataBox box = context.MapSubresource(sampleTexture, 0,
@@ -392,6 +411,13 @@ float4 strokeMask(StrokeVertex input) : SV_TARGET
             context.PixelShader.SetShaderResource(0, null);
             context.OutputMerger.SetRenderTargets((RenderTargetView)null);
             context.Flush();
+            fillData = data;
+            fillColumns = columns;
+            fillDecimation = decimation;
+            fillGridMax = gridMax;
+            fillOffset = offset;
+            fillDbmToPixel = dbmToPixel;
+            fillReady = true;
         }
 
         public void Dispose()

@@ -4138,6 +4138,13 @@ namespace Thetis
         }
         private static readonly bool _disableGpuPanFill =
             Environment.GetEnvironmentVariable("THETIS_PAN_FILL_GPU") == "0";
+        private static volatile bool _reuseGpuPanFillOnDuplicateFrame =
+            Environment.GetEnvironmentVariable("THETIS_PAN_FILL_REUSE") == "1";
+        public static bool ReuseGpuPanFillOnDuplicateFrame
+        {
+            get { return _reuseGpuPanFillOnDuplicateFrame; }
+            set { _reuseGpuPanFillOnDuplicateFrame = value; }
+        }
         private static volatile bool _disableGpuWaterfallRow =
             Environment.GetEnvironmentVariable("THETIS_WATERFALL_GPU") == "0";
         public static bool GpuWaterfallRowEnabled
@@ -5714,17 +5721,24 @@ namespace Thetis
 
         private static bool TryDrawGpuPanFill(int verticalShift, int width, int height,
             float[] data, int columns, int decimation, int gridMax, float offset,
-            float dbmToPixel, SharpDX.Direct2D1.Brush fillBrush)
+            float dbmToPixel, SharpDX.Direct2D1.Brush fillBrush, bool allowReuse)
         {
             if (_disableGpuPanFill || panFillGpuUnavailable || _device == null ||
                 _d2dRenderTarget == null || columns < 1 || width < 2 || height < 2)
                 return false;
             try
             {
+                long fillProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                    System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                 if (panFillGpu == null) panFillGpu = new PanFillGpu(_device);
-                _d2dRenderTarget.Flush();
-                panFillGpu.Render(_d2dRenderTarget, width, height, data, columns,
-                    decimation, gridMax, offset, dbmToPixel);
+                bool reuseFill = allowReuse && panFillGpu.CanReuseFill(width, height,
+                    data, columns, decimation, gridMax, offset, dbmToPixel);
+                if (!reuseFill)
+                {
+                    _d2dRenderTarget.Flush();
+                    panFillGpu.Render(_d2dRenderTarget, width, height, data, columns,
+                        decimation, gridMax, offset, dbmToPixel);
+                }
                 AntialiasMode previousAntialias = _d2dRenderTarget.AntialiasMode;
                 try
                 {
@@ -5743,6 +5757,9 @@ namespace Thetis
                 {
                     _d2dRenderTarget.AntialiasMode = previousAntialias;
                 }
+                WdspRuntimeProfiler.RecordDisplay(reuseFill ?
+                    WdspRuntimeProfiler.DisplayPanGpuFillReused :
+                    WdspRuntimeProfiler.DisplayPanGpuFillRendered, fillProfileStart);
                 return true;
             }
             catch (Exception error)
@@ -6191,7 +6208,9 @@ namespace Thetis
                         System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     gpuPanFillDrawn = TryDrawGpuPanFill(nVerticalShift, W, H,
                         data, nDecimatedWidth, local_Decimation, grid_max,
-                        fOffset, dbmToPixel, fillBrush);
+                        fOffset, dbmToPixel, fillBrush,
+                        _reuseGpuPanFillOnDuplicateFrame && !fresh3DFrame &&
+                        rx == 1 && !bottom && !local_mox && !draw3D);
                     WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanGpuFill,
                         gpuFillProfileStart);
                 }
