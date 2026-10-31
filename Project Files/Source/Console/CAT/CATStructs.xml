@@ -820,14 +820,14 @@
 		<nansparms>1</nansparms>
 	</catstruct>
 	<catstruct code="ZZNE">
-		<desc>Improved rx1 nr status</desc>
+		<desc>RX1 NR selection (0=off, 1-6=NR mode)</desc>
 		<active>true</active>
 		<nsetparms>1</nsetparms>
 		<ngetparms>0</ngetparms>
 		<nansparms>1</nansparms>
 	</catstruct>
 	<catstruct code="ZZNF">
-		<desc>Improved rx2 nr status</desc>
+		<desc>RX2 NR selection (0=off, 1-6=NR mode)</desc>
 		<active>true</active>
 		<nsetparms>1</nsetparms>
 		<ngetparms>0</ngetparms>

@@ -131,7 +131,7 @@ namespace Thetis
         private bool _threadsStarted;	// threads have started
 
         // define the position and size of the keyboard area
-        private int kylx = 12, kyty = 180;				// ulc of key area
+        private int kylx = 12, kyty = 270;				// ulc of key area
         private int kyysz = 82, kyxsz = 665;			// extents
         private char[] kbufold = new char[NKEYS];		// sent keys
         private char[] kbufnew = new char[NKEYS];		// unsent keys
@@ -183,6 +183,13 @@ namespace Thetis
         private System.Windows.Forms.NumericUpDownTS udWPM;
         private CheckBoxTS chkForceToCWmode;
         private CheckBoxTS chkFocusRequired;
+        private TextBox neuralRxText;
+        private CheckBox neuralRxEnabled;
+        private System.Windows.Forms.NumericUpDownTS udNeuralKeyGate;
+        private Label neuralRxStatus;
+        private Button neuralRxClear;
+        private System.Windows.Forms.Timer neuralRxTimer;
+        private NeuralCwDecoder neuralDecoder;
         private ASCIIEncoding AE = new ASCIIEncoding();
 
         #endregion
@@ -766,6 +773,8 @@ namespace Thetis
             //
             InitializeComponent();
 
+            InitializeNeuralRx();
+
             console = c;
 
             c.GlobalKeyPressDownHandlers += onGlobalKeyDown;
@@ -790,6 +799,7 @@ namespace Thetis
 
             //RestoreSettings();
             Common.RestoreForm(this, "CWX", true);
+            if (Width > 500) { Width = 720; Height = 410; }
 
             //		cwxwpm = 20;
             //		udWPM.Value = cwxwpm;
@@ -985,7 +995,7 @@ namespace Thetis
             this.expandButton.BackColor = System.Drawing.Color.RoyalBlue;
             this.expandButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.expandButton.Image = null;
-            this.expandButton.Location = new System.Drawing.Point(688, 266);
+            this.expandButton.Location = new System.Drawing.Point(688, 356);
             this.expandButton.Name = "expandButton";
             this.expandButton.Selectable = true;
             this.expandButton.Size = new System.Drawing.Size(8, 8);
@@ -1396,7 +1406,7 @@ namespace Thetis
             // 
             // txtdummy1
             // 
-            this.txtdummy1.Location = new System.Drawing.Point(12, 180);
+            this.txtdummy1.Location = new System.Drawing.Point(12, 270);
             this.txtdummy1.Multiline = true;
             this.txtdummy1.Name = "txtdummy1";
             this.txtdummy1.Size = new System.Drawing.Size(665, 82);
@@ -1516,7 +1526,7 @@ namespace Thetis
             // CWX
             // 
             this.AutoScaleBaseSize = new System.Drawing.Size(5, 13);
-            this.ClientSize = new System.Drawing.Size(704, 281);
+            this.ClientSize = new System.Drawing.Size(704, 371);
             this.Controls.Add(this.chkFocusRequired);
             this.Controls.Add(this.chkForceToCWmode);
             this.Controls.Add(this.chkAlwaysOnTop);
@@ -1586,11 +1596,141 @@ namespace Thetis
 
         #region event handlers and callbacks
 
+        private void InitializeNeuralRx()
+        {
+            // These legacy diagnostic labels were outside the original CWX client
+            // area. Enlarging the form exposes them on top of the TX key display.
+            label4.Visible = false;
+            label5.Visible = false;
+            label6.Visible = false;
+            label7.Visible = false;
+            neuralRxEnabled = new CheckBox { Text = "Neural CW RX (RX1)", Location = new Point(chkPause.Left, 185), AutoSize = true };
+            var neuralKeyGateLabel = new Label
+            {
+                Text = "Gate", Location = new Point(147, 186), Size = new Size(34, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            udNeuralKeyGate = new System.Windows.Forms.NumericUpDownTS
+            {
+                Name = "udNeuralKeyGate", Location = new Point(181, 183), Size = new Size(52, 22),
+                DecimalPlaces = 1, Increment = 0.5M, Minimum = 2.0M, Maximum = 20.0M,
+                Value = (decimal)NeuralCwDecoder.DefaultKeyingGate
+            };
+            neuralRxStatus = new Label
+            {
+                Text = "Off", Location = new Point(239, 183), Size = new Size(320, 22),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            neuralRxClear = new Button { Text = "Clear RX", Location = new Point(cbMorse.Right - 74, 183), Size = new Size(74, 22) };
+            neuralRxText = new TextBox
+            {
+                Location = new Point(12, 210), Size = new Size(665, 53), Multiline = true,
+                ReadOnly = true, ScrollBars = ScrollBars.Vertical, TabStop = false,
+                BackColor = Color.FromArgb(14, 23, 28), ForeColor = Color.LightGreen
+            };
+            neuralRxClear.Click += (s, e) => neuralRxText.Clear();
+            neuralRxEnabled.CheckedChanged += NeuralRxEnabledChanged;
+            udNeuralKeyGate.ValueChanged += (s, e) =>
+            {
+                if (neuralDecoder != null) neuralDecoder.KeyingGate = (double)udNeuralKeyGate.Value;
+            };
+            neuralRxTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            neuralRxTimer.Tick += (s, e) => UpdateNeuralRxRun();
+            Controls.Add(neuralRxEnabled);
+            Controls.Add(neuralKeyGateLabel);
+            Controls.Add(udNeuralKeyGate);
+            Controls.Add(neuralRxStatus);
+            Controls.Add(neuralRxClear);
+            Controls.Add(neuralRxText);
+        }
+
+        private void NeuralRxEnabledChanged(object sender, EventArgs e)
+        {
+            if (!neuralRxEnabled.Checked)
+            {
+                StopNeuralRx();
+                neuralRxStatus.Text = "Off";
+                return;
+            }
+            try
+            {
+                neuralDecoder = new NeuralCwDecoder(cmaster.GetChannelOutputRate(0, 0), (double)udNeuralKeyGate.Value);
+                neuralDecoder.TextReceived += AppendNeuralRx;
+                neuralDecoder.StatusChanged += SetNeuralRxStatus;
+                neuralDecoder.Start();
+                neuralRxTimer.Start();
+                UpdateNeuralRxRun();
+            }
+            catch (Exception error)
+            {
+                StopNeuralRx();
+                neuralRxEnabled.Checked = false;
+                neuralRxStatus.Text = error.Message;
+            }
+        }
+
+        private void UpdateNeuralRxRun()
+        {
+            if (neuralDecoder == null) return;
+            if (neuralDecoder.Error != null)
+            {
+                cmaster.SetCwRxAudioRun(0);
+                neuralRxStatus.Text = "CW RX error: " + neuralDecoder.Error;
+                return;
+            }
+            bool cw = console != null && (console.RX1DSPMode == DSPMode.CWL || console.RX1DSPMode == DSPMode.CWU);
+            bool active = cw && !console.MOX;
+            cmaster.SetCwRxAudioRun(active ? 1 : 0);
+            if (!active)
+                neuralRxStatus.Text = "Select CWL/CWU on RX1; TX pauses decoding";
+            else if (!neuralDecoder.HasFullWindow)
+                neuralRxStatus.Text = "Buffering RX audio (6 s)";
+            else if (neuralDecoder.ToneHz > 0)
+                neuralRxStatus.Text = string.Format("{0} | {1:0} Hz | key {2:0.0}/{3:0}",
+                    neuralDecoder.KeyingRatio >= neuralDecoder.KeyingGate ? "Listening" : "Below gate",
+                    neuralDecoder.ToneHz, neuralDecoder.KeyingRatio, neuralDecoder.KeyingGate);
+            else
+                neuralRxStatus.Text = "Listening | waiting for RX audio";
+        }
+
+        private void SetNeuralRxStatus(string status)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            BeginInvoke((Action)(() => neuralRxStatus.Text = status));
+        }
+
+        private void AppendNeuralRx(string text)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            BeginInvoke((Action)(() =>
+            {
+                if (neuralRxText.TextLength > 5000) neuralRxText.Text = neuralRxText.Text.Substring(1000);
+                neuralRxText.AppendText(text);
+            }));
+        }
+
+        private void StopNeuralRx()
+        {
+            neuralRxTimer?.Stop();
+            cmaster.SetCwRxAudioRun(0);
+            if (neuralDecoder != null)
+            {
+                neuralDecoder.TextReceived -= AppendNeuralRx;
+                neuralDecoder.StatusChanged -= SetNeuralRxStatus;
+                neuralDecoder.Dispose();
+                neuralDecoder = null;
+            }
+        }
+
         private void expandButton_Click(object sender, System.EventArgs e)
         {
 
             if (this.Width > 500)
             {
+                neuralRxText.Visible = false;
+                neuralRxEnabled.Visible = false;
+                neuralRxStatus.Visible = false;
+                neuralRxClear.Visible = false;
                 this.Width = 466;
                 this.Height = 190;
                 expandButton.Left = 432;
@@ -1599,10 +1739,14 @@ namespace Thetis
             }
             else
             {
+                neuralRxText.Visible = true;
+                neuralRxEnabled.Visible = true;
+                neuralRxStatus.Visible = true;
+                neuralRxClear.Visible = true;
                 this.Width = 720;
-                this.Height = 320;
+                this.Height = 410;
                 expandButton.Left = 688;
-                expandButton.Top = 266;
+                expandButton.Top = 356;
                 toolTip1.SetToolTip(expandButton, "Compress Form");
             }
         }
@@ -1754,6 +1898,10 @@ namespace Thetis
 #endif
             //MW0LGE moved here  from loadalpha
             cbMorse.SelectedIndex = 0;
+            // Crisp build starts neural CW receive decoding without launcher arguments.
+            if (!Array.Exists(Environment.GetCommandLineArgs(), arg =>
+                string.Equals(arg, "-noneuralcwrx", StringComparison.OrdinalIgnoreCase)))
+                neuralRxEnabled.Checked = true;
         }
         private void CWX_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
@@ -2548,6 +2696,8 @@ namespace Thetis
 
         private void CWX_FormClosing(object sender, FormClosingEventArgs e)
         {
+            StopNeuralRx();
+            neuralRxEnabled.Checked = false;
             //[2.10.3.1]MW0LGE added to stop this form from being destroyed and the reference in console.cs being lost
             //fixes issue where a polling serial product such as DXLabs Commander will 'bring to life' a dead CWXForm
             //when it queries wpm from the CWX form via CAT

@@ -2135,6 +2135,34 @@ namespace Thetis
             }
             return CmdState.NoChange;
         }
+        private CmdState ToggleNeuralNoiseReduction(int msg, int receiver, int nr)
+        {
+            if (msg != 127) return CmdState.NoChange;
+
+            parser.nGet = 0;
+            parser.nSet = 1;
+
+            string selected = receiver == 1 ? commands.ZZNE("") : commands.ZZNF("");
+            int current;
+            if (!Int32.TryParse(selected, out current)) return CmdState.NoChange;
+
+            int next = current == nr ? 0 : nr;
+            string result = receiver == 1 ? commands.ZZNE(next.ToString()) : commands.ZZNF(next.ToString());
+            if (result != "") return CmdState.NoChange;
+
+            return next == 0 ? CmdState.Off : CmdState.On;
+        }
+
+        public CmdState NoiseReduction5OnOff(int msg, MidiDevice device)
+        {
+            return ToggleNeuralNoiseReduction(msg, 1, 5);
+        }
+
+        public CmdState NoiseReduction6OnOff(int msg, MidiDevice device)
+        {
+            return ToggleNeuralNoiseReduction(msg, 1, 6);
+        }
+
         public void Rx2NoiseReduction4Amount(int msg, MidiDevice device)
         {
             parser.nSet = 3;
@@ -2240,6 +2268,16 @@ namespace Thetis
             }
             return CmdState.NoChange;
         }
+        public CmdState Rx2NoiseReduction5OnOff(int msg, MidiDevice device)
+        {
+            return ToggleNeuralNoiseReduction(msg, 2, 5);
+        }
+
+        public CmdState Rx2NoiseReduction6OnOff(int msg, MidiDevice device)
+        {
+            return ToggleNeuralNoiseReduction(msg, 2, 6);
+        }
+
         public CmdState Rx2PreAmpOnOff(int msg, MidiDevice device)
         {
             if (msg == 127)

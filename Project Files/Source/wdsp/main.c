@@ -25,6 +25,7 @@ warren@wpratt.com
 */
 
 #include "comm.h"
+#include "profile.h"
 
 void wdspmain (void *pargs)
 {
@@ -40,6 +41,7 @@ void wdspmain (void *pargs)
 		EnterCriticalSection (&ch[channel].csDSP);
 		if (!_InterlockedAnd (&ch[channel].iob.pd->exec_bypass, 1))
 		{
+			LONGLONG profile_start = wdsp_profile_now();
 			switch (ch[channel].type)
 			{
 			case 0:		// rxa
@@ -54,6 +56,8 @@ void wdspmain (void *pargs)
 
 				break;
 			}
+			if (ch[channel].type == 0)
+				wdsp_profile_add(channel, WDSP_PROFILE_RX_LOOP, profile_start);
 		}
 		LeaveCriticalSection (&ch[channel].csDSP);
 	}

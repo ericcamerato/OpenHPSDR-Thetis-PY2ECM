@@ -77,6 +77,20 @@ namespace Thetis
             
             Common.RestoreForm(this, "PureSignal", false); // will also restore txtPSpeak //MW0LGE_21k9rc5
 
+            // PureSignal 3.0 manages these former calibration-tuning options
+            // internally. Keep the legacy controls visible for layout/profile
+            // compatibility, but make it explicit that they no longer apply.
+            chkPSRelaxPtol.Enabled = false;
+            chkPSPin.Enabled = false;
+            chkPSMap.Enabled = false;
+            chkPSStbl.Enabled = false;
+            comboPSTint.Enabled = false;
+            toolTip1.SetToolTip(chkPSRelaxPtol, "Managed automatically by WDSP 2.10 PureSignal 3.0");
+            toolTip1.SetToolTip(chkPSPin, "Managed automatically by WDSP 2.10 PureSignal 3.0");
+            toolTip1.SetToolTip(chkPSMap, "Managed automatically by WDSP 2.10 PureSignal 3.0");
+            toolTip1.SetToolTip(chkPSStbl, "Managed automatically by WDSP 2.10 PureSignal 3.0");
+            toolTip1.SetToolTip(comboPSTint, "Managed automatically by WDSP 2.10 PureSignal 3.0");
+
             _advancedON = chkAdvancedViewHidden.Checked; //MW0LGE_[2.9.0.6]
 
             console.PowerChangeHanders += onPowerOn;
@@ -99,6 +113,7 @@ namespace Thetis
         //private int oldCalCount = 0;
         //private int red, green, blue;
         private eAAState _autoAttenuateState = eAAState.Monitor;
+        private int _lastAutoAttenuateAttempt = -1;
         private static double _PShwpeak;
         private static double _GetPSpeakval;
 
@@ -733,11 +748,19 @@ namespace Thetis
         {
             if (!_bPSRunning) return;
 
+            // WDSP 2.10 increments Info[7] for every calibration attempt, while
+            // Info[5] now counts successful calibrations only.  Keep a separate
+            // cursor because timer1code refreshes the snapshots every 10 ms but
+            // this state machine normally runs only every 100 ms.
+            int attempt = puresignal.CalibrationAttemptCount;
+            bool newAttempt = _lastAutoAttenuateAttempt >= 0 && attempt != _lastAutoAttenuateAttempt;
+            _lastAutoAttenuateAttempt = attempt;
+
             switch (_autoAttenuateState)
             {
                 case eAAState.Monitor:// 0: // monitor
                     if (_autoattenuate &&
-                        puresignal.CalibrationAttemptsChanged &&
+                        newAttempt &&
                         ((HPSDRModel.HERMESLITE != HardwareSpecific.Model && puresignal.NeedToRecalibrate(console.SetupForm.ATTOnTX)) ||
                         (HPSDRModel.HERMESLITE == HardwareSpecific.Model && puresignal.NeedToRecalibrate_HL2(console.SetupForm.ATTOnTX))))
                     {
@@ -836,10 +859,7 @@ namespace Thetis
 
         private void chkPSRelaxPtol_CheckedChanged(object sender, EventArgs e)
         {
-            if (chkPSRelaxPtol.Checked)
-                puresignal.SetPSPtol(_txachannel, 0.400);
-            else
-                puresignal.SetPSPtol(_txachannel, 0.800);
+            // Removed in WDSP 2.10: PureSignal 3.0 selects its tolerance internally.
         }
 
         private void chkPSAutoAttenuate_CheckedChanged(object sender, EventArgs e)
@@ -864,26 +884,17 @@ namespace Thetis
 
         private void chkPSPin_CheckedChanged(object sender, EventArgs e)
         {
-            if (chkPSPin.Checked)
-                puresignal.SetPSPinMode(_txachannel, 1);
-            else
-                puresignal.SetPSPinMode(_txachannel, 0);
+            // Removed in WDSP 2.10: PureSignal 3.0 manages curve pinning internally.
         }
 
         private void chkPSMap_CheckedChanged(object sender, EventArgs e)
         {
-            if (chkPSMap.Checked)
-                puresignal.SetPSMapMode(_txachannel, 1);
-            else
-                puresignal.SetPSMapMode(_txachannel, 0);
+            // Removed in WDSP 2.10: PureSignal 3.0 manages mapping internally.
         }
 
         private void chkPSStbl_CheckedChanged(object sender, EventArgs e)
         {
-            if (chkPSStbl.Checked)
-                puresignal.SetPSStabilize(_txachannel, 1);
-            else
-                puresignal.SetPSStabilize(_txachannel, 0);
+            // Removed in WDSP 2.10: PureSignal 3.0 manages stabilization internally.
         }
 
         private void comboPSTint_SelectedIndexChanged(object sender, EventArgs e)
@@ -891,25 +902,21 @@ namespace Thetis
             switch (comboPSTint.SelectedIndex)
             {
                 case 0:
-                    puresignal.SetPSIntsAndSpi(_txachannel, 16, 256);
                     _ints = 16;
                     _spi = 256;
                     btnPSSave.Enabled = btnPSRestore.Enabled = true;
                     break;
                 case 1:
-                    puresignal.SetPSIntsAndSpi(_txachannel, 8, 512);
                     _ints = 8;
                     _spi = 512;
                     btnPSSave.Enabled = btnPSRestore.Enabled = false;
                     break;
                 case 2:
-                    puresignal.SetPSIntsAndSpi(_txachannel, 4, 1024);
                     _ints = 4;
                     _spi = 1024;
                     btnPSSave.Enabled = btnPSRestore.Enabled = false;
                     break;
                 default:
-                    puresignal.SetPSIntsAndSpi(_txachannel, 16, 256);
                     _ints = 16;
                     _spi = 256;
                     btnPSSave.Enabled = btnPSRestore.Enabled = true;
@@ -1048,9 +1055,6 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetPSTXDelay", CallingConvention = CallingConvention.Cdecl)]
         public static extern double SetPSTXDelay(int channel, double delay);
 
-        [DllImport("wdsp.dll", EntryPoint = "psccF", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void psccF(int channel, int size, float* Itxbuff, float* Qtxbuff, float* Irxbuff, float* Qrxbuff, bool mox, bool solidmox);
-
         [DllImport("wdsp.dll", EntryPoint = "PSSaveCorr", CallingConvention = CallingConvention.Cdecl)]
         public static extern void PSSaveCorr(int channel, string filename);
 
@@ -1066,26 +1070,13 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "GetPSMaxTX", CallingConvention = CallingConvention.Cdecl)]
         public static extern void GetPSMaxTX(int channel, double* maxtx);
 
-        [DllImport("wdsp.dll", EntryPoint = "SetPSPtol", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetPSPtol(int channel, double ptol);
-
         [DllImport("wdsp.dll", EntryPoint = "GetPSDisp", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void GetPSDisp(int channel, IntPtr x, IntPtr ym, IntPtr yc, IntPtr ys, IntPtr cm, IntPtr cc, IntPtr cs);
+        public static extern void GetPSDisp(int channel, IntPtr x, IntPtr ym, IntPtr yc, IntPtr ys,
+            IntPtr xmCorr, IntPtr ymCorr, IntPtr xaCorr, IntPtr yaCorr,
+            int* samplesOut, int* correctionPointsOut, double* phaseReferenceDegreesOut);
 
         [DllImport("wdsp.dll", EntryPoint = "SetPSFeedbackRate", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetPSFeedbackRate(int channel, int rate);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetPSPinMode", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetPSPinMode(int channel, int pin);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetPSMapMode", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetPSMapMode(int channel, int map);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetPSStabilize", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetPSStabilize(int channel, int stbl);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetPSIntsAndSpi", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetPSIntsAndSpi(int channel, int ints, int spi);
 
         #endregion
 
@@ -1127,7 +1118,10 @@ namespace Thetis
             }
         }
         public static bool CalibrationAttemptsChanged {
-            get { return _info[5] != _oldInfo[5]; }
+            get { return _info[7] != _oldInfo[7]; }
+        }
+        public static int CalibrationAttemptCount {
+            get { return _info[7]; }
         }
         public static bool CorrectionsBeingApplied {
             get { return _info[14] == 1; }

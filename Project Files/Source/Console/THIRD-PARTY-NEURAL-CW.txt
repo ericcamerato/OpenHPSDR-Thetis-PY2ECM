@@ -1,0 +1,34 @@
+Neural CW receive decoder (experimental)
+
+DeepFist model (deepfist.onnx and deepfist.onnx.json)
+Copyright (C) 2026 Brent Crier, N9BC.
+Licensed under the MIT License, according to Lyra-SDR-cpp NOTICE.md:
+https://github.com/N8SDR1/Lyra-SDR-cpp/blob/main/NOTICE.md
+The model is SHA-256 6D2D4E3D66F9001D15E21A1B38B79150EAE19EAD86A310202900EE69D672B94D.
+
+ONNX Runtime 1.20.1
+Copyright (C) Microsoft Corporation. Licensed under the MIT License.
+https://github.com/microsoft/onnxruntime/blob/main/LICENSE
+Its ThirdPartyNotices.txt is distributed with the local dependency package.
+
+The C# RX frontend in this Thetis test branch is an independent implementation
+of the published model input/output contract. It does not copy Lyra's GPLv3+
+application code. The frontend is distributed under Thetis's GPLv2-or-later
+terms. This optional decoder makes no changes to CW transmit behavior.
+
+MIT License (for the DeepFist model and ONNX Runtime)
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

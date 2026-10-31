@@ -83,7 +83,7 @@ namespace Thetis
         private readonly List<string> CMASIO_ALWAYS_SHOW = new List<string>() {  "dl5tt", "dh1klm", "ea8djr", "ei7bmb", "kc1lko", "k1lsb", "k1sr", "k2gx", "k2tc", "kb2uka",
                                                                                  "ki4tga", "ko6dlv", "kw4ex", "m0cke", "mw0lge", "n6mud", "nc3z", "nj2us",
                                                                                  "nr0v", "ny8t", "oe3ide", "oz1ct", "sa3atf", "ve2jn", "ve9iou", "vk6ia",
-                                                                                 "w1aex", "w1izz", "wr1s", "w2pa", "w3ub", "w9ac", "w9ez", "mi0bot" };
+                                                                                 "w1aex", "w1izz", "wr1s", "w2pa", "w3ub", "w9ac", "w9ez", "mi0bot", "py2ecm" };
         #region Variable Declaration
 
         private Console console;
@@ -101,6 +101,18 @@ namespace Thetis
         private bool m_bShown = false; // used by the selective restore system to know accurate window state
 
         private frmBandwidth _frmBandwidth;
+
+        // WDSP 2.11 NNR controls are created here instead of in the generated
+        // designer file to keep the PY2ECM changes small and merge-friendly.
+        private readonly NumericUpDownTS[,] nudNNR = new NumericUpDownTS[2, 7];
+        // Mode 0: all Classic 3D views; mode 1: all new 3D views.
+        // Keep the existing control names so saved appearance settings still load.
+        private readonly CheckBoxTS[,] chk3DColorOverride = new CheckBoxTS[2, 2];
+        private readonly ColorButton[,] clrbtn3DColor = new ColorButton[2, 2];
+        private readonly TrackBarTS[,] tb3DColorAlpha = new TrackBarTS[2, 2];
+        private NumericUpDownTS nud3DFloor;
+        private NumericUpDownTS nud3DGain;
+        private NumericUpDownTS nud3DSpan;
 
         #endregion
 
@@ -124,12 +136,408 @@ namespace Thetis
             console = c;
             this.Owner = c;
 
+            InitializeUltrawideDisplayControl();
+            Initialize3DDisplayColorControls();
+            Initialize3DViewControls();
+            InitializeNNRControls();
+
             _frmBandwidth = new frmBandwidth();
 
             LogTool.Completed("INITCOMPSETUP");
 
             //everything here moved to AfterConstructor, which is called during singleton instance // G7KLJ's idea/implementation
         }
+
+        private CheckBoxTS chkUltrawideDisplay;
+
+        private void InitializeUltrawideDisplayControl()
+        {
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = "grpUltrawideDisplay",
+                Text = "Ultrawide layout",
+                Location = new Point(394, 218),
+                Size = new Size(166, 72)
+            };
+            chkUltrawideDisplay = new CheckBoxTS
+            {
+                Name = "chkUltrawideDisplay",
+                Text = "Enable ultrawide mode",
+                Location = new Point(8, 20),
+                Size = new Size(150, 19)
+            };
+            group.Controls.Add(chkUltrawideDisplay);
+            tpDisplayGeneral.Controls.Add(group);
+            group.BringToFront();
+            toolTip1.SetToolTip(chkUltrawideDisplay,
+                "Available on ultrawide monitors of at least 2560 pixels wide.");
+            chkUltrawideDisplay.CheckedChanged += (sender, args) =>
+                console.UltrawideMode = chkUltrawideDisplay.Checked;
+            tcDisplay.SelectedIndexChanged += (sender, args) => RefreshUltrawideDisplayControl();
+            Shown += (sender, args) => RefreshUltrawideDisplayControl();
+        }
+
+        private void RefreshUltrawideDisplayControl()
+        {
+            if (chkUltrawideDisplay == null) return;
+            chkUltrawideDisplay.Enabled = console.UltrawideAvailable;
+            chkUltrawideDisplay.Checked = console.UltrawideMode;
+        }
+
+        private void Initialize3DDisplayColorControls()
+        {
+            string[] modes = { "3D Classic", "3D" };
+            string[] suffixes = { "Pan", "Panafall" };
+            string[] fields = { "Active Peak", "Data Line" };
+            string[] fieldSuffixes = { "ActivePeak", "DataLine" };
+
+            for (int mode = 0; mode < 2; mode++)
+            {
+                GroupBoxTS group = new GroupBoxTS
+                {
+                    Name = "grp3DColors" + suffixes[mode],
+                    Text = modes[mode] + " (check to customize)                                      Alpha",
+                    Location = new Point(283, 254 + mode * 76),
+                    Size = new Size(431, 74)
+                };
+
+                for (int field = 0; field < 2; field++)
+                {
+                    int top = 17 + field * 25;
+                    CheckBoxTS enabled = new CheckBoxTS
+                    {
+                        Name = "chk3D" + suffixes[mode] + fieldSuffixes[field],
+                        Text = fields[field],
+                        Location = new Point(9, top + 3),
+                        Size = new Size(112, 19)
+                    };
+                    ColorButton color = new ColorButton
+                    {
+                        Name = "clrbtn3D" + suffixes[mode] + fieldSuffixes[field],
+                        Color = field == 0 ? Color.Gray : Color.White,
+                        Selectable = true,
+                        Location = new Point(128, top),
+                        Size = new Size(40, 23)
+                    };
+                    TrackBarTS alpha = new TrackBarTS
+                    {
+                        Name = "tb3D" + suffixes[mode] + fieldSuffixes[field] + "Alpha",
+                        AutoSize = false,
+                        Minimum = 0,
+                        Maximum = 255,
+                        TickFrequency = 50,
+                        Value = field == 0 ? 70 : 128,
+                        Location = new Point(182, top + 2),
+                        Size = new Size(231, 18)
+                    };
+                    chk3DColorOverride[mode, field] = enabled;
+                    clrbtn3DColor[mode, field] = color;
+                    tb3DColorAlpha[mode, field] = alpha;
+                    enabled.CheckedChanged += ThreeDDisplayColor_Changed;
+                    color.Changed += ThreeDDisplayColor_Changed;
+                    alpha.Scroll += ThreeDDisplayColor_Changed;
+                    group.Controls.Add(enabled);
+                    group.Controls.Add(color);
+                    group.Controls.Add(alpha);
+                }
+                tpAppearanceDisplay.Controls.Add(group);
+            }
+        }
+
+        private void ThreeDDisplayColor_Changed(object sender, EventArgs e)
+        {
+            if (!initializing) Apply3DDisplayColors();
+        }
+
+        private void Apply3DDisplayColors()
+        {
+            for (int mode = 0; mode < 2; mode++)
+            {
+                Color? peak = chk3DColorOverride[mode, 0].Checked ?
+                    Color.FromArgb(tb3DColorAlpha[mode, 0].Value, clrbtn3DColor[mode, 0].Color) : (Color?)null;
+                Color? line = chk3DColorOverride[mode, 1].Checked ?
+                    Color.FromArgb(tb3DColorAlpha[mode, 1].Value, clrbtn3DColor[mode, 1].Color) : (Color?)null;
+                Display.Set3DDisplayColors(mode, peak, line);
+            }
+        }
+
+        private void Initialize3DViewControls()
+        {
+            TabPage page = new TabPage
+            {
+                Name = "tpAppearance3DView",
+                Text = "3D View",
+                BackColor = SystemColors.Control
+            };
+            tcAppearance.TabPages.Insert(tcAppearance.TabPages.IndexOf(tpAppearanceDisplay) + 1, page);
+
+            LabelTS description = new LabelTS
+            {
+                Name = "lbl3DViewDescription",
+                Text = "Terrain controls for both 3D Pan and 3D Panafall. Changes apply live.",
+                Location = new Point(20, 18),
+                Size = new Size(650, 22)
+            };
+            page.Controls.Add(description);
+
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = "grp3DViewTerrain",
+                Text = "Spectrum terrain",
+                Location = new Point(18, 52),
+                Size = new Size(680, 252)
+            };
+            page.Controls.Add(group);
+
+            nud3DFloor = Create3DViewSetting(group, "nud3DFloor", "Floor", 6, 24, 28,
+                "dB below the measured noise floor. Moves the receding floor without raising the signal threshold.");
+            nud3DGain = Create3DViewSetting(group, "nud3DGain", "Gain", 70, 100, 96,
+                "Vertical height of the spectrum ridges, independent of the 2D panadapter scale.");
+            nud3DSpan = Create3DViewSetting(group, "nud3DSpan", "Span", 100, 100, 164,
+                "Width of the distant spectrum. 100 fills the plot; lower values increase perspective.");
+
+            ButtonTS reset = new ButtonTS
+            {
+                Name = "btn3DViewDefaults",
+                Text = "Restore 3D defaults",
+                Location = new Point(22, 211),
+                Size = new Size(150, 27)
+            };
+            reset.Click += delegate
+            {
+                nud3DFloor.Value = 6;
+                nud3DGain.Value = 70;
+                nud3DSpan.Value = 100;
+            };
+            group.Controls.Add(reset);
+        }
+
+        private NumericUpDownTS Create3DViewSetting(GroupBoxTS group, string name,
+            string labelText, decimal defaultValue, decimal maximum, int top, string tip)
+        {
+            LabelTS label = new LabelTS
+            {
+                Name = "lbl" + name.Substring(3),
+                Text = labelText,
+                Location = new Point(22, top + 4),
+                Size = new Size(140, 20)
+            };
+            NumericUpDownTS numeric = new NumericUpDownTS
+            {
+                Name = name,
+                Minimum = 0,
+                Maximum = maximum,
+                Value = defaultValue,
+                Location = new Point(176, top),
+                Size = new Size(78, 22)
+            };
+            LabelTS unit = new LabelTS
+            {
+                Name = "lbl" + name.Substring(3) + "Unit",
+                Text = labelText == "Floor" ? "dB" : "%",
+                Location = new Point(264, top + 4),
+                Size = new Size(40, 20)
+            };
+            LabelTS explanation = new LabelTS
+            {
+                Name = "lbl" + name.Substring(3) + "Explanation",
+                Text = tip,
+                Location = new Point(310, top + 4),
+                Size = new Size(350, 38)
+            };
+            numeric.ValueChanged += ThreeDViewSetting_Changed;
+            toolTip1.SetToolTip(label, tip);
+            toolTip1.SetToolTip(numeric, tip);
+            group.Controls.Add(label);
+            group.Controls.Add(numeric);
+            group.Controls.Add(unit);
+            group.Controls.Add(explanation);
+            return numeric;
+        }
+
+        private void ThreeDViewSetting_Changed(object sender, EventArgs e)
+        {
+            if (!initializing && !_gettingOptions) Apply3DViewSettings();
+        }
+
+        private void Apply3DViewSettings()
+        {
+            Display.ThreeDFloor = (int)nud3DFloor.Value;
+            Display.ThreeDGain = (int)nud3DGain.Value;
+            Display.ThreeDSpan = (int)nud3DSpan.Value;
+        }
+
+        private void InitializeNNRControls()
+        {
+            LabelTS description = new LabelTS
+            {
+                Name = "lblNNRDescription",
+                AutoSize = false,
+                Location = new Point(10, 8),
+                Size = new Size(700, 34),
+                Text = "WDSP 2.11: NR5/NR6 select voice models normally and CW models in CWU/CWL. RX settings are shared. Changes apply live."
+            };
+            tpDSPNNR.Controls.Add(description);
+
+            tpDSPNNR.Controls.Add(CreateNNRGroup(0, "NNR RX1", 8));
+            tpDSPNNR.Controls.Add(CreateNNRGroup(1, "NNR RX2", 360));
+        }
+
+        private GroupBoxTS CreateNNRGroup(int receiver, string title, int left)
+        {
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = receiver == 0 ? "grpNNRRX1" : "grpNNRRX2",
+                Text = title,
+                Location = new Point(left, 45),
+                Size = new Size(344, 350)
+            };
+
+            string suffix = receiver == 0 ? "RX1" : "RX2";
+            string[] labels =
+            {
+                "Mask floor", "Maximum gain", "Low-mask alpha", "Alpha knee",
+                "Adaptation time", "Smoothing attack", "Smoothing release"
+            };
+            string[] units = { "dB", "dB", "", "dB", "s", "ms", "ms" };
+            string[] names =
+            {
+                "udNNRMaskFloor", "udNNRMaxGain", "udNNRAlpha", "udNNRAlphaKnee",
+                "udNNRTau", "udNNRSmoothAttack", "udNNRSmoothRelease"
+            };
+            decimal[] minimum = { -60m, 0m, 0m, 0m, 0.05m, 0m, 0m };
+            decimal[] maximum = { 0m, 24m, 4m, 40m, 30m, 500m, 500m };
+            decimal[] increment = { 1m, 1m, 0.05m, 1m, 0.05m, 5m, 5m };
+            decimal[] defaults = { -25m, 12m, 1m, 10m, 2m, 0m, 0m };
+            int[] decimalPlaces = { 0, 0, 2, 0, 2, 0, 0 };
+            string[] tips =
+            {
+                "Minimum spectral mask. Less negative values preserve more voice and noise; more negative values suppress harder.",
+                "Maximum gain allowed after neural masking. Lower values can reduce harsh or cracked peaks.",
+                "Strength below the knee. Values below 1 preserve weak voice components; values above 1 suppress harder.",
+                "Level below which Low-mask alpha is applied.",
+                "Time constant used by the neural input conditioner.",
+                "Attack smoothing of the neural mask. A small value can reduce rough edges.",
+                "Release smoothing of the neural mask. Higher values can reduce musical or cracked artifacts."
+            };
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                int top = 24 + i * 34;
+                LabelTS label = new LabelTS
+                {
+                    Name = "lbl" + names[i].Substring(2) + suffix,
+                    AutoSize = false,
+                    Location = new Point(12, top + 3),
+                    Size = new Size(135, 20),
+                    Text = labels[i]
+                };
+                NumericUpDownTS numeric = new NumericUpDownTS
+                {
+                    Name = names[i] + suffix,
+                    Location = new Point(150, top),
+                    Size = new Size(78, 20),
+                    Minimum = minimum[i],
+                    Maximum = maximum[i],
+                    Increment = increment[i],
+                    DecimalPlaces = decimalPlaces[i],
+                    Value = defaults[i],
+                    TinyStep = false
+                };
+                LabelTS unit = new LabelTS
+                {
+                    Name = "lbl" + names[i].Substring(2) + "Unit" + suffix,
+                    AutoSize = false,
+                    Location = new Point(234, top + 3),
+                    Size = new Size(35, 20),
+                    Text = units[i]
+                };
+
+                toolTip1.SetToolTip(label, tips[i]);
+                toolTip1.SetToolTip(numeric, tips[i]);
+                numeric.ValueChanged += NNRControl_ValueChanged;
+                nudNNR[receiver, i] = numeric;
+                group.Controls.Add(label);
+                group.Controls.Add(numeric);
+                group.Controls.Add(unit);
+            }
+
+            ButtonTS gentle = new ButtonTS
+            {
+                Name = "btnNNRGentle" + suffix,
+                Text = "Voice smooth",
+                Location = new Point(54, 282),
+                Size = new Size(105, 28)
+            };
+            gentle.Click += delegate { SetNNRPreset(receiver, false); };
+            toolTip1.SetToolTip(gentle, "Gentler starting point intended to preserve voice body and reduce NR6 roughness.");
+
+            ButtonTS reset = new ButtonTS
+            {
+                Name = "btnNNRDefaults" + suffix,
+                Text = "WDSP defaults",
+                Location = new Point(174, 282),
+                Size = new Size(105, 28)
+            };
+            reset.Click += delegate { SetNNRPreset(receiver, true); };
+
+            LabelTS hint = new LabelTS
+            {
+                Name = "lblNNRHint" + suffix,
+                AutoSize = false,
+                Location = new Point(12, 317),
+                Size = new Size(320, 26),
+                Text = "Tip: try Voice smooth first, then adjust Mask floor."
+            };
+
+            group.Controls.Add(gentle);
+            group.Controls.Add(reset);
+            group.Controls.Add(hint);
+            return group;
+        }
+
+        private void SetNNRPreset(int receiver, bool wdspDefaults)
+        {
+            decimal[] values = wdspDefaults
+                ? new decimal[] { -25m, 12m, 1m, 10m, 2m, 0m, 0m }
+                : new decimal[] { -18m, 6m, 0.75m, 12m, 3m, 20m, 120m };
+
+            for (int i = 0; i < values.Length; i++)
+                nudNNR[receiver, i].Value = values[i];
+
+            ApplyNNRSettings(receiver);
+        }
+
+        private void NNRControl_ValueChanged(object sender, EventArgs e)
+        {
+            if (sender == null) return;
+            Control control = (Control)sender;
+            ApplyNNRSettings(control.Name.EndsWith("RX2", StringComparison.Ordinal) ? 1 : 0);
+        }
+
+        private void ApplyAllNNRSettings()
+        {
+            ApplyNNRSettings(0);
+            ApplyNNRSettings(1);
+        }
+
+        private void ApplyNNRSettings(int receiver)
+        {
+            if (console == null || nudNNR[receiver, 0] == null) return;
+
+            for (int subrx = 0; subrx < 2; subrx++)
+            {
+                RadioDSPRX rx = console.radio.GetDSPRX(receiver, subrx);
+                rx.RXANNRMaskFloor = (double)nudNNR[receiver, 0].Value;
+                rx.RXANNRMaxGain = (double)nudNNR[receiver, 1].Value;
+                rx.RXANNRAlpha = (double)nudNNR[receiver, 2].Value;
+                rx.RXANNRAlphaKnee = (double)nudNNR[receiver, 3].Value;
+                rx.RXANNRTau = (double)nudNNR[receiver, 4].Value;
+                rx.SetRXANNRSmooth((double)nudNNR[receiver, 5].Value,
+                                  (double)nudNNR[receiver, 6].Value);
+            }
+        }
+
         internal void AfterConstructor()
         {
             LogTool.AddLogEntry("      Setup setup controls...", "SETUP_CONT");
@@ -162,6 +570,7 @@ namespace Thetis
             //-
 
             udDisplayFPS.Maximum = Console.MAX_FPS;
+            udDisplayFPS3D.Maximum = Console.MAX_FPS;
 
             Skin.SetConsole(console);
 
@@ -931,7 +1340,8 @@ namespace Thetis
             if (needsRecovering(recoveryList, "udRX2DisplayGridMax")) udRX2DisplayGridMax.Value = Display.RX2SpectrumGridMax;
             if (needsRecovering(recoveryList, "udRX2DisplayGridMin")) udRX2DisplayGridMin.Value = Display.RX2SpectrumGridMin;
             if (needsRecovering(recoveryList, "udRX2DisplayGridStep")) udRX2DisplayGridStep.Value = Display.RX2SpectrumGridStep;
-            if (needsRecovering(recoveryList, "udDisplayFPS")) udDisplayFPS.Value = console.DisplayFPS;
+            if (needsRecovering(recoveryList, "udDisplayFPS")) udDisplayFPS.Value = console.DisplayFPS2D;
+            if (needsRecovering(recoveryList, "udDisplayFPS3D")) udDisplayFPS3D.Value = console.DisplayFPS3D;
             if (needsRecovering(recoveryList, "clrbtnWaterfallLow")) clrbtnWaterfallLow.Color = Display.WaterfallLowColor;
             if (needsRecovering(recoveryList, "clrbtnWaterfallLow_tx")) clrbtnWaterfallLow_tx.Color = Display.WaterfallLowColorTX;
             if (needsRecovering(recoveryList, "clrbtnRX2WaterfallLow")) clrbtnRX2WaterfallLow.Color = Display.RX2WaterfallLowColor;
@@ -1748,6 +2158,19 @@ namespace Thetis
             // these will be removed in saveOptions
             handleOutdatedOptions(ref a);
 
+            // Older databases do not contain these opt-in settings. Switching to one
+            // must not retain custom 3D colors from a previously loaded database.
+            if (recoveryList == null)
+            {
+                for (int mode = 0; mode < 2; mode++)
+                    for (int field = 0; field < 2; field++)
+                        if (!a.ContainsKey(chk3DColorOverride[mode, field].Name))
+                            chk3DColorOverride[mode, field].Checked = false;
+                if (!a.ContainsKey(nud3DFloor.Name)) nud3DFloor.Value = 6;
+                if (!a.ContainsKey(nud3DGain.Name)) nud3DGain.Value = 70;
+                if (!a.ContainsKey(nud3DSpan.Name)) nud3DSpan.Value = 100;
+            }
+
             List<string> sortedList = a.Keys.ToList();
             sortedList.Sort();
 
@@ -1755,7 +2178,11 @@ namespace Thetis
             //those controls will never be saved to the database, so when we recover, the count will be less than the number of controls as
             //this is checked before tabs are removed. A complete recovery is then done, which resets everything to default every
             //single time. TODO !!!!
-            if (a.Count < controls.Count)		// some control values are not in the database
+            int new3DSettingsMissing = 0;
+            if (!a.ContainsKey(nud3DFloor.Name)) new3DSettingsMissing++;
+            if (!a.ContainsKey(nud3DGain.Name)) new3DSettingsMissing++;
+            if (!a.ContainsKey(nud3DSpan.Name)) new3DSettingsMissing++;
+            if (a.Count < controls.Count - new3DSettingsMissing)		// some established control values are not in the database
             {								    // so set all of them to the defaults
                 InitGeneralTab(recoveryList);
                 InitAudioTab(recoveryList);
@@ -2063,6 +2490,8 @@ namespace Thetis
             }
 
             _gettingOptions = false;
+            Apply3DDisplayColors();
+            Apply3DViewSettings();
         }
 
         private string KeyToString(Keys k)
@@ -2352,6 +2781,7 @@ namespace Thetis
             udDisplayGridMin_ValueChanged(this, e);
             udDisplayGridStep_ValueChanged(this, e);
             udDisplayFPS_ValueChanged(this, e);
+            udDisplayFPS3D_ValueChanged(this, e);
             udTXGridMax_ValueChanged(this, e);
             udTXGridMin_ValueChanged(this, e);
             udTXGridStep_ValueChanged(this, e);
@@ -2583,6 +3013,7 @@ namespace Thetis
             nudNR4_snr_rx2_ValueChanged(this, e);
 
             setupNR4algorithm();
+            ApplyAllNNRSettings();
             //
 
             // Transmit Tab
@@ -4026,31 +4457,39 @@ namespace Thetis
         {
             get
             {
-                if (udATTOnTX != null) return (int)udATTOnTX.Value;
-                else return -1;
+                if (udATTOnTX == null || udATTOnTX.IsDisposed) return -1;
+                if (udATTOnTX.InvokeRequired)
+                    return (int)udATTOnTX.Invoke(new Func<int>(() => (int)udATTOnTX.Value));
+                return (int)udATTOnTX.Value;
             }
             set
             {
-                if (udATTOnTX != null)
+                if (udATTOnTX == null || udATTOnTX.IsDisposed) return;
+                if (udATTOnTX.InvokeRequired)
                 {
-                    if (value > 31) value = 31;
-
-                    if (HPSDRModel.HERMESLITE == HardwareSpecific.Model)
-                    {
-                        if (value < -28) value = -28; //MI0BOT: HL2 has a greater range and can go negative 
-                    }
-                    else
-                    {
-                        if (value < 0) value = 0; //MW0LGE [2.9.0.7] added after mi0bot source review
-                    }
-
-                    lblTXattBand.Text = console.TXBand.ToString();
-                    if (udATTOnTX.Value == value) //[2.10.3.6]MW0LGE no event will fire if the same, so force it
-                        udATTOnTX_ValueChanged(this, EventArgs.Empty);
-                    else
-                        udATTOnTX.Value = value;
+                    udATTOnTX.Invoke(new Action<int>(SetATTOnTXValue), value);
+                    return;
                 }
+                SetATTOnTXValue(value);
             }
+        }
+
+        private void SetATTOnTXValue(int value)
+        {
+            // PureSignal adjusts this value from its worker thread.  Keep the
+            // control range synchronized with HL2 and clamp against the actual
+            // NumericUpDown limits before assigning it.
+            if (HPSDRModel.HERMESLITE == HardwareSpecific.Model && udATTOnTX.Minimum > -28)
+                udATTOnTX.Minimum = -28;
+
+            decimal target = Math.Max(udATTOnTX.Minimum,
+                             Math.Min(udATTOnTX.Maximum, (decimal)value));
+
+            lblTXattBand.Text = console.TXBand.ToString();
+            if (udATTOnTX.Value == target) //[2.10.3.6]MW0LGE no event will fire if the same, so force it
+                udATTOnTX_ValueChanged(this, EventArgs.Empty);
+            else
+                udATTOnTX.Value = target;
         }
 
         public string SerialNumber
@@ -7470,7 +7909,7 @@ namespace Thetis
 
             bool was_enabled = console.RX2Enabled;
 
-            // MW0LGE [2.9.07] always initialise rx2 even if P1. Thanks to Reid (Gi8TME/Mi0BOT) and DH1KLM
+            // MW0LGE [2.9.07] always initialise rx2 even if P1. Thanks to Reid (GI8TME/MI0BOT) and DH1KLM
             // see https://github.com/ramdor/Thetis-2.9.0/issues/66
             //if ((NetworkIO.CurrentRadioProtocol == RadioProtocol.ETH) && (new_rate != old_rate || initializing || m_bForceAudio))
             if (new_rate != old_rate || initializing || m_bForceAudio)
@@ -7998,13 +8437,21 @@ namespace Thetis
         private void udDisplayFPS_ValueChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
-            console.DisplayFPS = (int)udDisplayFPS.Value;
+            console.DisplayFPS2D = (int)udDisplayFPS.Value;
 
             Display.ResetDX2DModeDescription();
 
             udDisplayAVGTime_ValueChanged(this, EventArgs.Empty);
             udRX2DisplayAVGTime_ValueChanged(this, EventArgs.Empty);
 
+            setWaterFallCalculatedDelayText();
+        }
+
+        private void udDisplayFPS3D_ValueChanged(object sender, System.EventArgs e)
+        {
+            if (initializing) return;
+            console.DisplayFPS3D = (int)udDisplayFPS3D.Value;
+            Display.ResetDX2DModeDescription();
             setWaterFallCalculatedDelayText();
         }
 
@@ -21181,7 +21628,8 @@ namespace Thetis
             OPTIONS3_Tab,
             PA_Tab,
             HWSET_Tab,
-            OtherHW_PA_Tab
+            OtherHW_PA_Tab,
+            NNR_Tab
         }
         public void ShowSetupTab(SetupTab eTab)
         {
@@ -21204,11 +21652,15 @@ namespace Thetis
                     break;
                 case SetupTab.NR_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 7; // select NR tab
+                    TabDSP.SelectedTab = tpDSPNR;
+                    break;
+                case SetupTab.NNR_Tab:
+                    TabSetup.SelectedIndex = 3;
+                    TabDSP.SelectedTab = tpDSPNNR;
                     break;
                 case SetupTab.NB_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 9; // select NB tab
+                    TabDSP.SelectedTab = tpDSPNB;
                     break;
                 case SetupTab.CW_Tab:
                     TabSetup.SelectedIndex = 3;
@@ -21228,15 +21680,15 @@ namespace Thetis
                     break;
                 case SetupTab.MNF_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 8; // select MNF tab
+                    TabDSP.SelectedTab = tpDSPMNF;
                     break;
                 case SetupTab.VOXDE_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 10; // select VOX/DE tab
+                    TabDSP.SelectedTab = tpDSPVOXDE;
                     break;
                 case SetupTab.CFC_Tab:
                     TabSetup.SelectedIndex = 3;
-                    TabDSP.SelectedIndex = 11; // select CFC tab
+                    TabDSP.SelectedTab = tpDSPCFC;
                     break;
                 case SetupTab.VAC1_Tab:
                     TabSetup.SelectedIndex = 1; // vac1

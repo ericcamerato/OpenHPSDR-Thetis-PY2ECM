@@ -243,6 +243,37 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetRXAEMNRRun", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXAEMNRRun(int channel, int run);
 
+        // WDSP 2.10 Deep Neural Network Noise Reduction (NNR).
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRRun", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRRun(int channel, int run);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRPosition", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRPosition(int channel, int position);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRModel", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int SetRXANNRModel(int channel, int model);
+
+        [DllImport("wdsp.dll", EntryPoint = "GetRXANNRModel", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int GetRXANNRModel(int channel);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRMaskFloor", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRMaskFloor(int channel, double floor_db);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRMaxGain", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRMaxGain(int channel, double max_gain_db);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRAlpha", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRAlpha(int channel, double alpha);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRAlphaKnee", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRAlphaKnee(int channel, double knee_db);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRTau", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRTau(int channel, double tau);
+
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRSmooth", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRSmooth(int channel, double attack_ms, double release_ms);
+
         // rnnoise
         [DllImport("wdsp.dll", EntryPoint = "SetRXARNNRRun", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXARNNRRun(int channel, int run);
@@ -790,10 +821,6 @@ namespace Thetis
         // RXEQ
         [DllImport("wdsp.dll", EntryPoint = "SetRXAEQProfile", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXAEQProfile(int channel, int nfreqs, double* F, double* G, double* Q);
-
-        // GetTXACFCOMPGainAndMask
-        [DllImport("wdsp.dll", EntryPoint = "GetTXACFCOMPGainAndMask", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void GetTXACFCOMPGainAndMask(int channel, double* gain_values, double* mask_values, int* ready);
 
         // GetTXACFCOMPDisplayCompression
         [DllImport("wdsp.dll", EntryPoint = "GetTXACFCOMPDisplayCompression", CallingConvention = CallingConvention.Cdecl)]

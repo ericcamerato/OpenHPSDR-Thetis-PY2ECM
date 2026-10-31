@@ -8716,6 +8716,14 @@ namespace Thetis
                     (bit_group, bit) = OtherButtonIdHelpers.BitFromID(OtherButtonId.NR4);
                     bit = (bit_group * 32) + bit;
                     SetOn(1, bit, value == 4);
+
+                    (bit_group, bit) = OtherButtonIdHelpers.BitFromID(OtherButtonId.NR5);
+                    bit = (bit_group * 32) + bit;
+                    SetOn(1, bit, value == 5);
+
+                    (bit_group, bit) = OtherButtonIdHelpers.BitFromID(OtherButtonId.NR6);
+                    bit = (bit_group * 32) + bit;
+                    SetOn(1, bit, value == 6);
                 }
             }
             public override int NB 

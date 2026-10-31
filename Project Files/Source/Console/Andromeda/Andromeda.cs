@@ -4174,7 +4174,11 @@ namespace Thetis
             else
             {
                 //[2.10.3.5]MW0LGE we are expanded, so ok to move them always
-                moveModeSpecificPanels();
+                // The ultrawide layout places the mode-specific panels beside
+                // the mode buttons. Moving them back to their legacy positions
+                // on every mode change covers the filter controls.
+                if (!ultrawideMode || !UltrawideAvailable)
+                    moveModeSpecificPanels();
             }
 
             //MW0LGE_21k9d changed to show/hide as it was causing some unexplained

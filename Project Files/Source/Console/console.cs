@@ -194,6 +194,10 @@ namespace Thetis
         private RadioButtonTS[] vhf_text;
 
         private bool was_panadapter = false;				// used to restore panadater when switching to spectrum DSP mode
+        private bool was_3d_panadapter = false;
+        private bool was_3d_panadapter_classic = false;
+        private bool was_3d_panafall = false;
+        private bool was_3d_panafall_classic = false;
         private bool was_waterfall = false;					// used to restore waterfall when switching to spectrum DSP mode
 
         public float[] rx1_preamp_offset;					// offset values for each preamp mode in dB
@@ -805,6 +809,8 @@ namespace Thetis
             // for resizing
             GrabConsoleSizeBasis();
             MinimumSize = this.Size;
+            InitializeUltrawideMode();
+            InitializeGpuWaterfallTestButton();
 
             LogTool.Completed("COMP");
 
@@ -1465,6 +1471,26 @@ namespace Thetis
         // ======================================================
         // Main
         // ======================================================
+        private static string[] AddCrispDefaults(string[] args)
+        {
+            var result = new List<string>(args);
+            if (!result.Any(a => a.StartsWith("-dbid:", StringComparison.OrdinalIgnoreCase)))
+                result.Add("-dbid:PY2ECM-WDSP210");
+            if (!result.Any(a => string.Equals(a, "-cmasioconfig", StringComparison.OrdinalIgnoreCase)))
+                result.Add("-cmasioconfig");
+            if (!result.Any(a => a.StartsWith("-datapath:", StringComparison.OrdinalIgnoreCase)))
+            {
+                string portableData = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "user-data");
+                string dataPath = Directory.Exists(portableData)
+                    ? portableData
+                    : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "OpenHPSDR", "Thetis-PY2ECM-Crisp-2.10.4.1");
+                Directory.CreateDirectory(dataPath);
+                result.Add("-datapath:" + dataPath);
+            }
+            return result.ToArray();
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -1482,6 +1508,8 @@ namespace Thetis
             {
                 if (showHelpInfo()) return;  // if we can show, instantly exit
             }
+
+            args = AddCrispDefaults(args);
 
             //[2.10.3.12]MW0LGE command line adaptor select
             if (Common.HasArg(args, "-adaptor"))
@@ -2857,8 +2885,10 @@ namespace Thetis
             a.Add("last_radio_protocol/" + Audio.LastRadioProtocol.ToString());
             a.Add("last_radio_hardware/" + Audio.LastRadioHardware.ToString());
 
-            a.Add("nr_selected/" + nr_selected_to_text());
-            a.Add("nr_selected_by_mode/" + nr_selected_by_mode_to_text());
+            // Keep the legacy keys limited to NR..NR4 so older Thetis builds
+            // sharing this database never receive unknown NR5/NR6 values.
+            a.Add("nr_selected/" + legacy_nr_selected_to_text());
+            a.Add("nr_selected_by_mode/" + legacy_nr_selected_by_mode_to_text());
             a.Add("agc_selected_by_mode/" + agc_selected_by_mode_to_text());
             a.Add("anf_selected_by_mode/" + anf_selected_by_mode_to_text());
 
@@ -3378,6 +3408,14 @@ namespace Thetis
 
             DB.PurgeNotches();
             DB.SaveVars("State", a, true);
+
+            // Store WDSP 2.10-only selections outside the legacy State group.
+            // Older Thetis builds can save their State without deleting these.
+            List<string> wdsp210State = new List<string>();
+            wdsp210State.Add("nr_selected/" + nr_selected_to_text());
+            wdsp210State.Add("nr_selected_by_mode/" + nr_selected_by_mode_to_text());
+            wdsp210State.Add("ultrawide_mode/" + ultrawideMode.ToString().ToLowerInvariant());
+            DB.SaveVars("PY2ECM_WDSP210", wdsp210State, true);
         }
 
         //        public void SaveState()
@@ -5133,6 +5171,27 @@ namespace Thetis
                 }
             }
 
+            // Apply the extended NR5/NR6 state after the legacy state. This
+            // separate group survives saving from an older shared-db build.
+            foreach (string s in DB.GetVars("PY2ECM_WDSP210"))
+            {
+                string[] vals = s.Split(new char[] { '/' }, 2);
+                if (vals.Length != 2) continue;
+
+                switch (vals[0])
+                {
+                    case "nr_selected":
+                        nr_selected_from_text(vals[1]);
+                        break;
+                    case "nr_selected_by_mode":
+                        nr_selected_by_mode_from_text(vals[1]);
+                        break;
+                    case "ultrawide_mode":
+                        ultrawideMode = vals[1] == "true";
+                        break;
+                }
+            }
+
             //[2.10.1.12]MW0LGE - apply CTUN state, and done above CentreFrequency assignment below
             //Will inform the display engine of the ctun state via the delegate
             //NOTE: ideally _click_tune_display will already equal bClickTuneRX1 as the chk will have happened in the loop above,
@@ -5638,6 +5697,10 @@ namespace Thetis
                 s = s.Substring(0, 1).ToUpper() + s.Substring(1, s.Length - 1);
                 comboDisplayMode.Items.Add(s);
             }
+            comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("Panadapter") + 1, "3D Pan");
+            comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("3D Pan") + 1, "3D Pan Classic");
+            comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("3D Pan Classic") + 1, "3D Panafall");
+            comboDisplayMode.Items.Insert(comboDisplayMode.Items.IndexOf("3D Panafall") + 1, "3D PF Classic");
         }
 
         private void InitAGCModes()
@@ -18592,7 +18655,7 @@ namespace Thetis
             {
                 value = Math.Max(0, value);			// lower bound
 
-                if (HardwareSpecific.Model == HPSDRModel.HERMESLITE) // Mi0BOT: Limit upper bound for HL2
+                if (HardwareSpecific.Model == HPSDRModel.HERMESLITE) // MI0BOT: Limit upper bound for HL2
                     value = Math.Min(90, value);		// upper bound
                 else
                     value = Math.Min(100, value);		// upper bound
@@ -20338,31 +20401,63 @@ namespace Thetis
         }
 
         private int _display_fps = 60;
+        private int _display_fps_2d = 60;
+        private int _display_fps_3d = 30;
+        private bool _panafall3d_enabled;
         private double _display_delay = 1000 / 60f;
         public int DisplayFPS
         {
             get { return _display_fps; }
+            set { DisplayFPS2D = value; }
+        }
+
+        public int DisplayFPS2D
+        {
+            get { return _display_fps_2d; }
             set
             {
-                int old_fps = _display_fps;
+                _display_fps_2d = Math.Max(1, Math.Min(MAX_FPS, value));
+                ApplyActiveDisplayFPS();
+            }
+        }
 
-                _display_fps = value;
-                if (_display_fps > MAX_FPS) _display_fps = MAX_FPS;
-                if (_display_fps < 1) _display_fps = 1;
-                _display_delay = 1000 / (float)_display_fps;
+        public int DisplayFPS3D
+        {
+            get { return _display_fps_3d; }
+            set
+            {
+                _display_fps_3d = Math.Max(1, Math.Min(MAX_FPS, value));
+                ApplyActiveDisplayFPS();
+            }
+        }
 
-                Display.CurrentFPS = _display_fps; //MW0LGE_21k8 pre init
+        private bool Panafall3DActive
+        {
+            get
+            {
+                return _panafall3d_enabled &&
+                    (Display.CurrentDisplayMode == DisplayMode.PANADAPTER ||
+                     Display.CurrentDisplayMode == DisplayMode.PANAFALL);
+            }
+        }
 
-                int wdspFps = (int)Math.Max(1, _display_fps * 1.1f); //[2.10.3]MW0LGE add in 10% extra so frames are more often avaialble for use in RunDisplay()
+        private void ApplyActiveDisplayFPS()
+        {
+            int old_fps = _display_fps;
+            _display_fps = Panafall3DActive ? _display_fps_3d : _display_fps_2d;
+            _display_delay = 1000 / (float)_display_fps;
+            Display.CurrentFPS = _display_fps;
+
+            int wdspFps = (int)Math.Max(1, _display_fps * 1.1f);
+            if (specRX != null)
+            {
                 specRX.GetSpecRX(0).FrameRate = wdspFps;
                 specRX.GetSpecRX(1).FrameRate = wdspFps;
                 specRX.GetSpecRX(cmaster.inid(1, 0)).FrameRate = wdspFps;
-
-                if (old_fps != _display_fps)
-                {
-                    FSPChangedHandlers?.Invoke(old_fps, _display_fps);
-                }
             }
+
+            if (old_fps != _display_fps)
+                FSPChangedHandlers?.Invoke(old_fps, _display_fps);
         }
 
         private int multimeter_peak_hold_time = 500;
@@ -24356,6 +24451,7 @@ namespace Thetis
         unsafe private void RunDisplay()
         {            
             m_bDisplayLoopRunning = true;
+            WdspRuntimeProfiler wdspProfiler = WdspRuntimeProfiler.StartIfRequested();
 
             try
             {
@@ -24772,6 +24868,10 @@ namespace Thetis
             catch (Exception e)
             {
                 Common.LogException(e);
+            }
+            finally
+            {
+                if (wdspProfiler != null) wdspProfiler.Dispose();
             }
 
             m_bDisplayLoopRunning = false;
@@ -27860,6 +27960,29 @@ namespace Thetis
             }
         }
         private bool DataFlowing = false;
+        private System.Windows.Forms.Timer hl2CwRxStartupRetuneTimer;
+
+        private void ResendHL2CwRxTuningAfterStart()
+        {
+            if (HardwareSpecific.Model != HPSDRModel.HERMESLITE ||
+                (RX1DSPMode != DSPMode.CWL && RX1DSPMode != DSPMode.CWU)) return;
+
+            if (hl2CwRxStartupRetuneTimer == null)
+            {
+                hl2CwRxStartupRetuneTimer = new System.Windows.Forms.Timer { Interval = 500 };
+                hl2CwRxStartupRetuneTimer.Tick += (sender, args) =>
+                {
+                    hl2CwRxStartupRetuneTimer.Stop();
+                    if (PowerOn && DataFlowing && !MOX &&
+                        HardwareSpecific.Model == HPSDRModel.HERMESLITE &&
+                        (RX1DSPMode == DSPMode.CWL || RX1DSPMode == DSPMode.CWU))
+                        UpdateRX1DDSFreq();
+                };
+            }
+
+            hl2CwRxStartupRetuneTimer.Stop();
+            hl2CwRxStartupRetuneTimer.Start();
+        }
         private byte[] id_bytes = new byte[1];
         private void chkPower_CheckedChanged(object sender, System.EventArgs e)
         {
@@ -28120,6 +28243,7 @@ namespace Thetis
                 if (radio.GetDSPRX(1, 0).Active) WDSP.SetChannelState(WDSP.id(2, 0), 1, 1);
 
                 DataFlowing = true;
+                ResendHL2CwRxTuningAfterStart();
                 SetupForm.UpdateGeneraHardware();
                 SetMicGain();
                 chkQSK_CheckStateChanged(this, EventArgs.Empty);
@@ -28471,6 +28595,13 @@ namespace Thetis
         {
             _pause_DisplayThread = true;
             DisplayMode old_mode = Display.CurrentDisplayMode;
+            _panafall3d_enabled = comboDisplayMode.Text == "3D Pan" ||
+                comboDisplayMode.Text == "3D Pan Classic" ||
+                comboDisplayMode.Text == "3D Panafall" ||
+                comboDisplayMode.Text == "3D PF Classic";
+            Display.Panafall3DEnabled = _panafall3d_enabled;
+            Display.Panafall3DClassic = comboDisplayMode.Text == "3D Pan Classic" ||
+                comboDisplayMode.Text == "3D PF Classic";
 
             switch (comboDisplayMode.Text)
             {
@@ -28482,6 +28613,8 @@ namespace Thetis
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 1, 0, 0, 0);
                     break;
                 case "Panadapter":
+                case "3D Pan":
+                case "3D Pan Classic":
                     Display.CurrentDisplayMode = DisplayMode.PANADAPTER;
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 0, 0, 0, 0);
                     CalcDisplayFreq();
@@ -28517,6 +28650,8 @@ namespace Thetis
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 1, 0, 0, 0);
                     break;
                 case "Panafall":
+                case "3D Panafall":
+                case "3D PF Classic":
                     Display.CurrentDisplayMode = DisplayMode.PANAFALL;
                     WDSP.SetRXASpectrum(WDSP.id(0, 0), 0, 0, 0, 0);
                     CalcDisplayFreq();
@@ -28672,16 +28807,25 @@ namespace Thetis
             }
 
             was_panadapter = false;
+            was_3d_panadapter = false;
+            was_3d_panadapter_classic = false;
+            was_3d_panafall = false;
+            was_3d_panafall_classic = false;
             was_waterfall = false;
             UpdateRX1DisplayOffsets();
             UpdateRX2DisplayOffsets();
 
             if (comboDisplayMode.Focused)
                 btnHidden.Focus();
+            int previousFPS = DisplayFPS;
+            ApplyActiveDisplayFPS();
+            if (previousFPS != DisplayFPS)
+                Display.ResetDX2DModeDescription();
             _pause_DisplayThread = false;
 
             if(old_mode != Display.CurrentDisplayMode)
             {
+                Display.ResetPanafall3DHistory();
                 DisplayModeChangedHandlers?.Invoke(1, old_mode, Display.CurrentDisplayMode);
             }
         }
@@ -30132,6 +30276,41 @@ namespace Thetis
         private PreampMode temp_mode = PreampMode.HPSDR_OFF; // HPSDR preamp mode
         private PreampMode temp_mode2 = PreampMode.HPSDR_OFF; // HPSDR preamp mode
 
+        // Suppress the HL2 RX audio transient during digital TX without changing AF controls or profiles.
+        private bool _hl2_digital_tx_rx_audio_muted = false;
+        private double _hl2_digital_tx_rx1_gain;
+        private double _hl2_digital_tx_rx1_sub_gain;
+        private double _hl2_digital_tx_rx2_gain;
+
+        private void SetHL2DigitalTXRXAudioMute(bool mute)
+        {
+            if (mute)
+            {
+                if (_hl2_digital_tx_rx_audio_muted || HardwareSpecific.Model != HPSDRModel.HERMESLITE)
+                    return;
+
+                DSPMode tx_mode = radio.GetDSPTX(0).CurrentDSPMode;
+                if (tx_mode != DSPMode.DIGL && tx_mode != DSPMode.DIGU)
+                    return;
+
+                _hl2_digital_tx_rx1_gain = radio.GetDSPRX(0, 0).RXOutputGain;
+                _hl2_digital_tx_rx1_sub_gain = radio.GetDSPRX(0, 1).RXOutputGain;
+                _hl2_digital_tx_rx2_gain = radio.GetDSPRX(1, 0).RXOutputGain;
+
+                radio.GetDSPRX(0, 0).RXOutputGain = 0.0;
+                radio.GetDSPRX(0, 1).RXOutputGain = 0.0;
+                radio.GetDSPRX(1, 0).RXOutputGain = 0.0;
+                _hl2_digital_tx_rx_audio_muted = true;
+            }
+            else if (_hl2_digital_tx_rx_audio_muted)
+            {
+                radio.GetDSPRX(0, 0).RXOutputGain = _hl2_digital_tx_rx1_gain;
+                radio.GetDSPRX(0, 1).RXOutputGain = _hl2_digital_tx_rx1_sub_gain;
+                radio.GetDSPRX(1, 0).RXOutputGain = _hl2_digital_tx_rx2_gain;
+                _hl2_digital_tx_rx_audio_muted = false;
+            }
+        }
+
         private bool _forceATTwhenPSAoff = true; //MW0LGE [2.9.0.7] added
         public bool ForceATTwhenPSAoff
         {
@@ -30367,6 +30546,8 @@ namespace Thetis
                 }
             }
 
+            if (tx) SetHL2DigitalTXRXAudioMute(true);
+
             _pause_DisplayThread = true; // MW0LGE_21k8 turn display off whilst everything is being setup, prevents flashes of pixels etc
 
             if (tx)                     // change to TX mode
@@ -30520,6 +30701,7 @@ namespace Thetis
 
             if (!tx)
             {
+                SetHL2DigitalTXRXAudioMute(false);
                 pa_fwd_power = 0;
                 pa_rev_power = 0;
                 HighSWR = false;
@@ -31245,6 +31427,15 @@ namespace Thetis
         }
         public void ExtendPanelDisplaySizeRight(bool expand)
         {
+            // Legacy-item visibility changes call this independently of ResizeConsole.
+            // In ultrawide mode the spectrum must keep both side rails covered.
+            if (ultrawideMode && UltrawideAvailable)
+            {
+                panelDisplay.Bounds = new Rectangle(0, panelDisplay.Top,
+                    ClientSize.Width, panelDisplay.Height);
+                return;
+            }
+
             if (IsCollapsedView && !IsExpandedView) // to be sure to be sure
             {
                 //do nothing
@@ -31264,6 +31455,10 @@ namespace Thetis
         }
         public void ExtendPanelDisplaySizeTop(bool expand)
         {
+            // The ultrawide layout owns the spectrum's vertical placement too.
+            // A legacy toggle must not move it back to the normal-view origin.
+            if (ultrawideMode && UltrawideAvailable) return;
+
             if (IsCollapsedView && !IsExpandedView) // to be sure to be sure
             {
                 //do nothing
@@ -35000,14 +35195,22 @@ namespace Thetis
                 case DSPMode.SPEC:
                     radModeSPEC.BackColor = SystemColors.Control;
                     comboDisplayMode.Items.Insert(1, "Panadapter");
-                    comboDisplayMode.Items.Insert(5, "Waterfall");
+                    comboDisplayMode.Items.Insert(2, "3D Pan");
+                    comboDisplayMode.Items.Insert(3, "3D Pan Classic");
+                    comboDisplayMode.Items.Insert(4, "3D Panafall");
+                    comboDisplayMode.Items.Insert(5, "3D PF Classic");
+                    comboDisplayMode.Items.Insert(7, "Waterfall");
                     ptbFilterShift.Enabled = true;
                     btnFilterShiftReset.Enabled = true;
                     if (new_mode != DSPMode.DRM && new_mode != DSPMode.FM)
                         EnableAllFilters();
                     RX1Filter = rx1_filter;
                     //if_shift = true;
-                    if (was_panadapter) comboDisplayMode.Text = "Panadapter";
+                    if (was_3d_panafall_classic) comboDisplayMode.Text = "3D PF Classic";
+                    else if (was_3d_panafall) comboDisplayMode.Text = "3D Panafall";
+                    else if (was_3d_panadapter_classic) comboDisplayMode.Text = "3D Pan Classic";
+                    else if (was_3d_panadapter) comboDisplayMode.Text = "3D Pan";
+                    else if (was_panadapter) comboDisplayMode.Text = "Panadapter";
                     else if (was_waterfall) comboDisplayMode.Text = "Waterfall";
                     switch (Display.CurrentDisplayMode)
                     {
@@ -35282,15 +35485,29 @@ namespace Thetis
                     DisableAllFilters();
                     ptbFilterShift.Enabled = false;
                     btnFilterShiftReset.Enabled = false;
-                    bool save_pan = (Display.CurrentDisplayMode == DisplayMode.PANADAPTER);
+                    bool save_3d_pan = comboDisplayMode.Text == "3D Pan";
+                    bool save_3d_pan_classic = comboDisplayMode.Text == "3D Pan Classic";
+                    bool save_3d_panafall = comboDisplayMode.Text == "3D Panafall";
+                    bool save_3d_panafall_classic = comboDisplayMode.Text == "3D PF Classic";
+                    bool save_pan = Display.CurrentDisplayMode == DisplayMode.PANADAPTER &&
+                        !save_3d_pan && !save_3d_pan_classic;
                     bool save_water = (Display.CurrentDisplayMode == DisplayMode.WATERFALL);
-                    if (save_pan || save_water)
+                    if (save_pan || save_3d_pan || save_3d_pan_classic || save_3d_panafall ||
+                        save_3d_panafall_classic || save_water)
                     {
                         comboDisplayMode.Text = "Spectrum";
                     }
                     comboDisplayMode.Items.Remove("Panadapter");
+                    comboDisplayMode.Items.Remove("3D Pan");
+                    comboDisplayMode.Items.Remove("3D Pan Classic");
+                    comboDisplayMode.Items.Remove("3D Panafall");
+                    comboDisplayMode.Items.Remove("3D PF Classic");
                     comboDisplayMode.Items.Remove("Waterfall");
                     was_panadapter = save_pan;
+                    was_3d_panadapter = save_3d_pan;
+                    was_3d_panadapter_classic = save_3d_pan_classic;
+                    was_3d_panafall = save_3d_panafall;
+                    was_3d_panafall_classic = save_3d_panafall_classic;
                     was_waterfall = save_water;
                     radio.GetDSPRX(0, 0).SpectrumPreFilter = true;
                     Display.RXDisplayLow = -(int)sample_rate_rx1 / 2;
@@ -37844,6 +38061,7 @@ namespace Thetis
         {
             // MW0LGE changes made to this function so that RX1 meter fills space to right of VFOB box, also delay repaint until all controls moved
             SuspendDrawing(this); //MW0LGE
+            RestoreUltrawidePositions();
 
             // This routine captures the size and location parameters *after* windows
             // has resized the image, (if the video is set for "120 dpi" in lieu of the
@@ -37951,6 +38169,8 @@ namespace Thetis
             }
 
             setPAProfileLabelPos();  //[2.10.1.0] MW0LGE
+
+            ApplyUltrawideLayout();
 
             ResumeDrawing(this); //MW0LGE
         }
@@ -43555,6 +43775,18 @@ namespace Thetis
                         SelectNR(1, true, is_on ? 0 : 4);
                     }
                     break;
+                case "NR5 (NNR Standard)":
+                    {
+                        bool is_on = _nr_selected[0] == 5;
+                        SelectNR(1, true, is_on ? 0 : 5);
+                    }
+                    break;
+                case "NR6 (NNR Premium)":
+                    {
+                        bool is_on = _nr_selected[0] == 6;
+                        SelectNR(1, true, is_on ? 0 : 6);
+                    }
+                    break;
                 case "ANF":
                     chkANF.Checked = !chkANF.Checked;
                     break;
@@ -43614,6 +43846,18 @@ namespace Thetis
                     {
                         bool is_on = _nr_selected[1] == 4;
                         SelectNR(2, true, is_on ? 0 : 4);
+                    }
+                    break;
+                case "NR5 (NNR Standard)":
+                    {
+                        bool is_on = _nr_selected[1] == 5;
+                        SelectNR(2, true, is_on ? 0 : 5);
+                    }
+                    break;
+                case "NR6 (NNR Premium)":
+                    {
+                        bool is_on = _nr_selected[1] == 6;
+                        SelectNR(2, true, is_on ? 0 : 6);
                     }
                     break;
                 case "ANF":
@@ -44316,6 +44560,14 @@ namespace Thetis
         }
 
         private int[] _nr_selected = new int[]{ 0, 0 }; // the current NR for each rx
+        // NR7/NR8 from early WDSP 2.11 previews become NR5/NR6. The selected
+        // model family now follows the receive mode instead of adding UI modes.
+        private static int NormalizeNRSelection(int nr)
+        {
+            if (nr == 7) return 5;
+            if (nr == 8) return 6;
+            return Math.Max(0, Math.Min(6, nr));
+        }
         private int[,] _nr_selected_by_mode = new int[2, (int)DSPMode.LAST];
         private bool _nr_selected_by_mode_loaded = false;
         private bool _restoring_nr_selected_by_mode = false;
@@ -44462,8 +44714,8 @@ namespace Thetis
 
                 for (int mode = 0; mode < modes.Length; mode++)
                 {
-                    if (!int.TryParse(modes[mode], out int nr) || nr < 0 || nr > 4) return;
-                    values[rx, mode] = nr;
+                    if (!int.TryParse(modes[mode], out int nr) || nr < 0 || nr > 8) return;
+                    values[rx, mode] = NormalizeNRSelection(nr);
                 }
             }
 
@@ -44483,6 +44735,24 @@ namespace Thetis
                 {
                     if (mode > 0) ret += ",";
                     ret += _nr_selected_by_mode[rx, mode].ToString();
+                }
+            }
+            return ret;
+        }
+
+        private string legacy_nr_selected_by_mode_to_text()
+        {
+            ensure_nr_selected_by_mode();
+
+            string ret = "";
+            for (int rx = 0; rx < _nr_selected.Length; rx++)
+            {
+                if (rx > 0) ret += "|";
+                for (int mode = 0; mode < (int)DSPMode.LAST; mode++)
+                {
+                    if (mode > 0) ret += ",";
+                    int nr = _nr_selected_by_mode[rx, mode];
+                    ret += (nr <= 4 ? nr : 0).ToString();
                 }
             }
             return ret;
@@ -44609,8 +44879,9 @@ namespace Thetis
             try
             {
                 _restoring_nr_selected_by_mode = true;
-                _nr_selected_by_mode[rx - 1, (int)mode] = nr;
-                SelectNR(rx, true, nr);
+                int selection = NormalizeNRSelection(nr);
+                _nr_selected_by_mode[rx - 1, (int)mode] = selection;
+                SelectNR(rx, true, selection);
             }
             finally
             {
@@ -44634,7 +44905,7 @@ namespace Thetis
             {
                 if (int.TryParse(parts[i], out int nr))
                 {
-                    _nr_selected[i] = nr;
+                    _nr_selected[i] = NormalizeNRSelection(nr);
                 }
             }
 
@@ -44654,14 +44925,26 @@ namespace Thetis
             if (ret.EndsWith("|")) ret = ret.Substring(0, ret.Length - 1);
             return ret;
         }
+        private string legacy_nr_selected_to_text()
+        {
+            string ret = "";
+            for (int i = 0; i < _nr_selected.Length; i++)
+            {
+                int nr = _nr_selected[i];
+                ret += (nr <= 4 ? nr : 0).ToString() + "|";
+            }
+            if (ret.EndsWith("|")) ret = ret.Substring(0, ret.Length - 1);
+            return ret;
+        }
         private void incrementNR(int rx)
         {
             if (rx < 1 || rx > 2) return;
 
+            _nr_selected[rx - 1] = NormalizeNRSelection(_nr_selected[rx - 1]);
             int old_nr = _nr_selected[rx - 1];
 
             _nr_selected[rx - 1] += 1;
-            if (_nr_selected[rx - 1] > 4) _nr_selected[rx - 1] = 0;
+            if (_nr_selected[rx - 1] > 6) _nr_selected[rx - 1] = 0;
 
             setupNR(rx, false);
             setupNR(rx, true);
@@ -44672,7 +44955,8 @@ namespace Thetis
         public void SelectNR(int rx, bool incude_sub, int nr)
         {
             if (rx < 1 || rx > 2) return;
-            if (nr < 0 || nr > 4) return;
+            if (nr < 0 || nr > 8) return;
+            nr = NormalizeNRSelection(nr);
 
             int old_nr = _nr_selected[rx - 1];
 
@@ -44698,14 +44982,27 @@ namespace Thetis
 
             RadioDSPRX rad = radio.GetDSPRX(rx - 1, sub ? 1 : 0);
 
+            // Every NR implementation is mutually exclusive. NNR is explicitly
+            // stopped before selecting a legacy NR, and re-enabled for NNR models.
+            rad.RXANNRRun = 0;
+
+            if (rx == 1)
+            {
+                NR5ToolStripMenuItem.Checked = false;
+                NR6ToolStripMenuItem.Checked = false;
+            }
+            else
+            {
+                NR5ToolStripMenuItem_rx2.Checked = false;
+                NR6ToolStripMenuItem_rx2.Checked = false;
+            }
+
             nR2ToolStripMenuItem.Checked = false;
             NR2StripMenuItem2.Checked = false;
             cat_rx2_nr_status = 0;
             cat_rx2_nr2_status = 0;
 
-            int nr = _nr_selected[rx - 1];
-            if (nr < 0) nr = 0;
-            if (nr > 4) nr = 4;
+            int nr = NormalizeNRSelection(_nr_selected[rx - 1]);
 
             switch (nr)
             {
@@ -44865,6 +45162,47 @@ namespace Thetis
                             NR4ToolStripMenuItem_rx2.Checked = true;
                             chkRX2NR.Text = "NR4";
                             lblRX2NRLabel.Text = "NR4";
+                            chkRX2NR.Checked = true;
+                            break;
+                    }
+                    break;
+                case 5: // WDSP NNR Standard: speech or CW model by receive mode
+                case 6: // WDSP NNR Premium: speech or CW model by receive mode
+                    rad.RXANR4Run = 0;
+                    rad.RXANR3Run = 0;
+                    rad.RXANR2Run = 0;
+                    rad.RXANR1Run = 0;
+                    DSPMode nrMode = nr_mode_for_rx(rx);
+                    bool cwModel = nrMode == DSPMode.CWL || nrMode == DSPMode.CWU;
+                    rad.RXANNRModel = (nr - 5) + (cwModel ? 2 : 0);
+                    rad.RXANNRRun = 1;
+
+                    switch (rx)
+                    {
+                        case 1:
+                            cat_nr_status = 0;
+                            cat_nr2_status = 0;
+                            NRToolStripMenuItem.Checked = false;
+                            NR2ToolStripMenuItem1.Checked = false;
+                            NR3ToolStripMenuItem.Checked = false;
+                            NR4ToolStripMenuItem.Checked = false;
+                            NR5ToolStripMenuItem.Checked = nr == 5;
+                            NR6ToolStripMenuItem.Checked = nr == 6;
+                            chkNR.Text = "NR" + nr;
+                            lblNRLabel.Text = chkNR.Text;
+                            chkNR.Checked = true;
+                            break;
+                        case 2:
+                            cat_rx2_nr_status = 0;
+                            cat_rx2_nr2_status = 0;
+                            nR2ToolStripMenuItem.Checked = false;
+                            NR2StripMenuItem2.Checked = false;
+                            NR3ToolStripMenuItem_rx2.Checked = false;
+                            NR4ToolStripMenuItem_rx2.Checked = false;
+                            NR5ToolStripMenuItem_rx2.Checked = nr == 5;
+                            NR6ToolStripMenuItem_rx2.Checked = nr == 6;
+                            chkRX2NR.Text = "NR" + nr;
+                            lblRX2NRLabel.Text = chkRX2NR.Text;
                             chkRX2NR.Checked = true;
                             break;
                     }
@@ -45841,12 +46179,19 @@ namespace Thetis
         }
         private void chkNR_MouseDown(object sender, MouseEventArgs e)
         {
-            if (IsRightButton(e)) SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab);
+            if (IsRightButton(e)) ShowSelectedNRSetupTab(1);
         }
 
         private void chkRX2NR_MouseDown(object sender, MouseEventArgs e)
         {
-            if (IsRightButton(e)) SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab);
+            if (IsRightButton(e)) ShowSelectedNRSetupTab(2);
+        }
+
+        private void ShowSelectedNRSetupTab(int rx)
+        {
+            int nr = GetSelectedNR(rx);
+            SetupForm.ShowSetupTab(nr >= 5 && nr <= 8
+                ? Setup.SetupTab.NNR_Tab : Setup.SetupTab.NR_Tab);
         }
 
         private void chkNB_MouseDown(object sender, MouseEventArgs e)
@@ -52863,6 +53208,16 @@ namespace Thetis
                         if (GetSelectedNR(rx) == 4) { SelectNR(rx, true, 0); } else { SelectNR(rx, true, 4); }
                     }
                     break;
+                case OtherButtonId.NR5:
+                    {
+                        if (GetSelectedNR(rx) == 5) { SelectNR(rx, true, 0); } else { SelectNR(rx, true, 5); }
+                    }
+                    break;
+                case OtherButtonId.NR6:
+                    {
+                        if (GetSelectedNR(rx) == 6) { SelectNR(rx, true, 0); } else { SelectNR(rx, true, 6); }
+                    }
+                    break;
                 case OtherButtonId.NB1:
                     {
                         if (GetSelectedNB(rx) == 1) { SetSelectedNB(rx, 0); } else { SetSelectedNB(rx, 1); }
@@ -53047,12 +53402,18 @@ namespace Thetis
             switch (id)
             {
                 case OtherButtonId.NR:
+                    ShowSelectedNRSetupTab(rx);
+                    break;
                 case OtherButtonId.NR1:
                 case OtherButtonId.NR2:
                 case OtherButtonId.NR3:
                 case OtherButtonId.NR4:
                 case OtherButtonId.ANF:
                     SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab);
+                    break;
+                case OtherButtonId.NR5:
+                case OtherButtonId.NR6:
+                    SetupForm.ShowSetupTab(Setup.SetupTab.NNR_Tab);
                     break;
                 case OtherButtonId.NB:
                 case OtherButtonId.NB1:
@@ -53455,6 +53816,8 @@ namespace Thetis
                 case OtherButtonId.NR2: return GetSelectedNR(rx) == 2;
                 case OtherButtonId.NR3: return GetSelectedNR(rx) == 3;
                 case OtherButtonId.NR4: return GetSelectedNR(rx) == 4;
+                case OtherButtonId.NR5: return GetSelectedNR(rx) == 5;
+                case OtherButtonId.NR6: return GetSelectedNR(rx) == 6;
                 case OtherButtonId.NB1: return GetSelectedNB(rx) == 1;
                 case OtherButtonId.NB2: return GetSelectedNB(rx) == 2;
                 case OtherButtonId.XPA: 

@@ -60,6 +60,7 @@ namespace Thetis
         private int down_x;
         private int down_y;
         private Rectangle _limitBar_rect;
+        private bool _geometryReady;
 
         public class LimitConstraint : EventArgs
         {
@@ -76,6 +77,7 @@ namespace Thetis
             this.SetStyle(ControlStyles.Selectable, true);
             this.TabStop = true;
             _head_rect = new Rectangle(0, 0, 1, 1);
+            _geometryReady = true;
         }
 
         #endregion
@@ -326,6 +328,18 @@ namespace Thetis
         #endregion
 
         #region Event Handlers
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            if (!_geometryReady) return;
+
+            // The thumb and limit line depend on the control's pixel width.
+            // Recalculate both when a layout changes width without changing Value.
+            UpdateHeadRectPos();
+            UpdateLimitBar();
+            Invalidate();
+        }
 
         protected override void OnEnabledChanged(EventArgs e)
         {

@@ -122,6 +122,12 @@ namespace Thetis
         [DllImport("ChannelMaster.dll", EntryPoint = "SendpOutboundTCIRxAudio", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SendpOutboundTCIRxAudio(TCIStreamSamples del);
 
+        [DllImport("ChannelMaster.dll", EntryPoint = "SendpOutboundCwRxAudio", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void SendpOutboundCwRxAudio(CwAudioSamples del);
+
+        [DllImport("ChannelMaster.dll", EntryPoint = "SetCwRxAudioRun", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetCwRxAudioRun(int active);
+
         [DllImport("ChannelMaster.dll", EntryPoint = "SendpInboundTCITxAudio", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SendpInboundTCITxAudio(TCITxInput del);
 
@@ -1149,6 +1155,7 @@ namespace Thetis
             //tci
             SendpOutboundTCIRxIQ(TCIRxIQOutDel);
             SendpOutboundTCIRxAudio(TCIRxAudioOutDel);
+            SendpOutboundCwRxAudio(CwRxAudioOutDel);
             SendpInboundTCITxAudio(TCITxAudioInDel);
             //
 
@@ -1159,6 +1166,13 @@ namespace Thetis
 
         #region TCI Audio
         unsafe public delegate void TCIStreamSamples(int id, int nsamples, double* data);
+        unsafe private delegate void CwAudioSamples(int nsamples, double* data);
+        unsafe private static readonly CwAudioSamples CwRxAudioOutDel = OnCwRxAudioSamples;
+
+        private static unsafe void OnCwRxAudioSamples(int nsamples, double* data)
+        {
+            NeuralCwDecoder.Current?.Enqueue(nsamples, data);
+        }
         unsafe public delegate void TCITxInput(int nsamples, double* data);
         unsafe private static TCIStreamSamples TCIRxIQOutDel = OnTCIRxIQOutSamples;
         unsafe private static TCIStreamSamples TCIRxAudioOutDel = OnTCIRxAudioOutSamples;

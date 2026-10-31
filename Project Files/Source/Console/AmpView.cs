@@ -73,10 +73,10 @@ namespace Thetis
         double[] ym = new double[max_samps];
         double[] yc = new double[max_samps];
         double[] ys = new double[max_samps];
-        double[] cm = new double[4 * max_ints];
-        double[] cc = new double[4 * max_ints];
-        double[] cs = new double[4 * max_ints];
-        double[] t  = new double[max_ints + 1];
+        double[] xmCorr = new double[np];
+        double[] ymCorr = new double[np];
+        double[] xaCorr = new double[np];
+        double[] yaCorr = new double[np];
         int skip = 1;
         bool showgain = false;
         private static Object intslock = new Object();
@@ -94,10 +94,6 @@ namespace Thetis
             //hcm = GCHandle.Alloc(cm, GCHandleType.Pinned);
             //hcc = GCHandle.Alloc(cc, GCHandleType.Pinned);
             //hcs = GCHandle.Alloc(cs, GCHandleType.Pinned);
-            double delta = 1.0 / (double)_psform.Ints;
-            t[0] = 0.0;
-            for (int i = 1; i <= _psform.Ints; i++)
-                t[i] = t[i - 1] + delta;
             EventArgs ex = EventArgs.Empty;
             chkAVShowGain_CheckedChanged(this, ex);
             chkAVLowRes_CheckedChanged(this, ex);
@@ -153,18 +149,10 @@ namespace Thetis
             }
         }
 
-        private void disp_data_Update(int ints, int spi)
+        private void disp_data_Update(int sampleCount, int correctionPointCount)
         {
-            double delta = 1.0 / (double)np;
-            double qx = delta;
-            double dx;
-            double qym, qyc, qys, phs;
-            double phs_base;
-            int k;
-            double dt = 1.0 / (double)ints;
-            t[0] = 0.0;
-            for (int i = 1; i <= ints; i++)
-                t[i] = t[i - 1] + dt;
+            sampleCount = Math.Max(0, Math.Min(max_samps, sampleCount));
+            correctionPointCount = Math.Max(0, Math.Min(np, correctionPointCount));
 
             if (!showgain)
             {
@@ -178,80 +166,44 @@ namespace Thetis
                 chart1.Series["Ref"].Points[0].SetValueXY(0.0, 1.0);
                 chart1.Series["Ref"].Points[1].SetValueXY(1.0, 1.0);
             }
-            chart1.Series["MagCorr"].Points[0].SetValueXY(0.0, 0.0);
-            k = ints - 1;
-            dx = t[ints] - t[ints - 1];
-            qyc = cc[4 * k + 0] + dx * (cc[4 * k + 1] + dx * (cc[4 * k + 2] + dx * cc[4 * k + 3]));
-            qys = cs[4 * k + 0] + dx * (cs[4 * k + 1] + dx * (cs[4 * k + 2] + dx * cs[4 * k + 3]));
-            phs_base = 180.0 / Math.PI * Math.Atan2(qys, qyc);
-            int nLastGoodPoint = -1;
-            for (int i = 1; i <= np; i++)
+
+            chart1.Series["MagCorr"].Points[0].SetValueXY(0.0, showgain ? 1.0 : 0.0);
+            int lastCorrection = Math.Max(0, correctionPointCount - 1);
+            for (int i = 0; i < np; i++)
             {
-                if ((k = (int)(qx * ints)) > ints - 1) k = ints - 1;
-                dx = qx - t[k];
-                qym = cm[4 * k + 0] + dx * (cm[4 * k + 1] + dx * (cm[4 * k + 2] + dx * cm[4 * k + 3]));
-                qyc = cc[4 * k + 0] + dx * (cc[4 * k + 1] + dx * (cc[4 * k + 2] + dx * cc[4 * k + 3]));
-                qys = cs[4 * k + 0] + dx * (cs[4 * k + 1] + dx * (cs[4 * k + 2] + dx * cs[4 * k + 3]));
-                if (!showgain)
-                    chart1.Series["MagCorr"].Points[i].SetValueXY(qx, qym * qx);
-                else
-                    chart1.Series["MagCorr"].Points[i].SetValueXY(qx, qym);
-                phs = 180.0 / Math.PI * Math.Atan2(qys, qyc) - phs_base;
-                if (phs > -180.0 && phs < +180.0)
-                {
-                    chart1.Series["PhsCorr"].Points[i-1].SetValueXY(qx, phs);
-                    nLastGoodPoint = i-1;
-                }
-                else
-                {
-                    // no data, so need to use last known x/y so that un-used point is 'invisible'
-                    if (nLastGoodPoint != -1)
-                    {
-                        DataPoint dp = chart1.Series["PhsCorr"].Points[nLastGoodPoint];
-                        chart1.Series["PhsCorr"].Points[i - 1].SetValueXY((double)dp.XValue, (double)dp.YValues[0]);
-                    }
-                    else
-                    {
-                        chart1.Series["PhsCorr"].Points[i - 1].SetValueXY(0.0, 0.0);
-                    }
-                    
-                }
-                qx += delta;
+                int source = Math.Min(i, lastCorrection);
+                double cx = correctionPointCount > 0 ? xmCorr[source] : 0.0;
+                double gain = correctionPointCount > 0 ? ymCorr[source] : 1.0;
+                double phase = correctionPointCount > 0 ? yaCorr[source] : 0.0;
+                chart1.Series["MagCorr"].Points[i + 1].SetValueXY(cx, showgain ? gain : gain * cx);
+                chart1.Series["PhsCorr"].Points[i].SetValueXY(cx, phase);
             }
-            k = ints * spi - 1;
-            phs_base = 180.0 / Math.PI * Math.Atan2(yc[k], ys[k]);
 
-            nLastGoodPoint = -1;
-            for (int i = 0; i < ints * spi; i++)
+            double phaseBase = sampleCount > 0
+                ? 180.0 / Math.PI * Math.Atan2(yc[sampleCount - 1], ys[sampleCount - 1])
+                : 0.0;
+            int lastSample = -1;
+            for (int i = 0; i < max_samps; i++)
             {
-                if (i % skip == 0)
+                if (i < sampleCount && i % skip == 0)
                 {
-                    if (!showgain)
-                        chart1.Series["MagAmp"].Points[i].SetValueXY(ym[i] * x[i], x[i]);
-                    else
-                        chart1.Series["MagAmp"].Points[i].SetValueXY(ym[i] * x[i], 1.0 / ym[i]);
-                    phs = 180.0 / Math.PI * Math.Atan2(yc[i], ys[i]) - phs_base;
-                    chart1.Series["PhsAmp"].Points[i].SetValueXY(x[i], phs);
-
-                    nLastGoodPoint = i;
+                    double gain = Math.Abs(ym[i]) > 1.0e-12 ? 1.0 / ym[i] : 0.0;
+                    chart1.Series["MagAmp"].Points[i].SetValueXY(ym[i] * x[i], showgain ? gain : x[i]);
+                    double phase = 180.0 / Math.PI * Math.Atan2(yc[i], ys[i]) - phaseBase;
+                    chart1.Series["PhsAmp"].Points[i].SetValueXY(x[i], phase);
+                    lastSample = i;
+                }
+                else if (lastSample >= 0)
+                {
+                    DataPoint mag = chart1.Series["MagAmp"].Points[lastSample];
+                    DataPoint phase = chart1.Series["PhsAmp"].Points[lastSample];
+                    chart1.Series["MagAmp"].Points[i].SetValueXY(mag.XValue, mag.YValues[0]);
+                    chart1.Series["PhsAmp"].Points[i].SetValueXY(phase.XValue, phase.YValues[0]);
                 }
                 else
                 {
-                    // no data, so need to use last known x/y so that un-used point is 'invisible'
-                    if (nLastGoodPoint != -1)
-                    {
-                        DataPoint dp;
-                        dp = chart1.Series["MagAmp"].Points[nLastGoodPoint];
-                        chart1.Series["MagAmp"].Points[i].SetValueXY((double)dp.XValue, (double)dp.YValues[0]);
-
-                        dp = chart1.Series["PhsAmp"].Points[nLastGoodPoint];
-                        chart1.Series["PhsAmp"].Points[i].SetValueXY((double)dp.XValue, (double)dp.YValues[0]);
-                    }
-                    else
-                    {
-                        chart1.Series["MagAmp"].Points[i].SetValueXY(0.0, 0.0);
-                        chart1.Series["PhsAmp"].Points[i].SetValueXY(0.0, 0.0);
-                    }
+                    chart1.Series["MagAmp"].Points[i].SetValueXY(0.0, 0.0);
+                    chart1.Series["PhsAmp"].Points[i].SetValueXY(0.0, 0.0);
                 }
             }
         }
@@ -374,62 +326,68 @@ namespace Thetis
                 fixed (double* pym = ym)
                 fixed (double* pyc = yc)
                 fixed (double* pys = ys)
-                fixed (double* pcm = cm)
-                fixed (double* pcc = cc)
-                fixed (double* pcs = cs)
+                fixed (double* pxmCorr = xmCorr)
+                fixed (double* pymCorr = ymCorr)
+                fixed (double* pxaCorr = xaCorr)
+                fixed (double* pyaCorr = yaCorr)
                 {
+                    int sampleCount = 0;
+                    int correctionPointCount = 0;
+                    double phaseReferenceDegrees = 0.0;
                     puresignal.GetPSDisp(
                         WDSP.id(1, 0),
                         new IntPtr(px),
                         new IntPtr(pym),
                         new IntPtr(pyc),
                         new IntPtr(pys),
-                        new IntPtr(pcm),
-                        new IntPtr(pcc),
-                        new IntPtr(pcs)
+                        new IntPtr(pxmCorr),
+                        new IntPtr(pymCorr),
+                        new IntPtr(pxaCorr),
+                        new IntPtr(pyaCorr),
+                        &sampleCount,
+                        &correctionPointCount,
+                        &phaseReferenceDegrees
                     );
+
+                    lock (intslock)
+                    {
+                        int displayShape = sampleCount * 1000 + correctionPointCount;
+                        if (_oldIntsSpi != displayShape)
+                        {
+                            _oldIntsSpi = displayShape;
+                            _init = true;
+                        }
+                        if (_init)
+                        {
+                            init_data(max_ints, max_samps / max_ints);
+                            _init = false;
+                        }
+                        update_chart(sampleCount, correctionPointCount);
+                    }
                 }
-            }
-            //
-
-            lock (intslock)
-            {
-                //disp_data(); // MW0LGE [2.9.0.8] changed to an add once, update points method.
-                               // Prevents the chart from having 1000's of points added and removed
-                               // 10 times a second.
-                chart1.Series.SuspendUpdates();
-                chart1.Series["Ref"].Points.SuspendUpdates();
-                chart1.Series["MagCorr"].Points.SuspendUpdates();
-                chart1.Series["PhsCorr"].Points.SuspendUpdates();
-                chart1.Series["MagAmp"].Points.SuspendUpdates();
-                chart1.Series["PhsAmp"].Points.SuspendUpdates();
-
-                int ints = _psform.Ints;
-                int spi = _psform.Spi;
-                int instSpiTot = ints * spi;
-                if (_oldIntsSpi != instSpiTot)
-                {
-                    _oldIntsSpi = instSpiTot;
-                    _init = true;
-                }
-                if (_init)
-                {
-                    init_data(ints, spi);
-                    _init = false;
-                }
-                disp_data_Update(ints, spi);
-
-                chart1.Series["PhsAmp"].Points.ResumeUpdates();
-                chart1.Series["MagAmp"].Points.ResumeUpdates();
-                chart1.Series["PhsCorr"].Points.ResumeUpdates();
-                chart1.Series["MagCorr"].Points.ResumeUpdates();
-                chart1.Series["Ref"].Points.ResumeUpdates();
-                chart1.Series.ResumeUpdates();
-
-                chart1.Invalidate();
             }
 
             if(!_is_closing) timer1.Start();
+        }
+
+        private void update_chart(int sampleCount, int correctionPointCount)
+        {
+            chart1.Series.SuspendUpdates();
+            chart1.Series["Ref"].Points.SuspendUpdates();
+            chart1.Series["MagCorr"].Points.SuspendUpdates();
+            chart1.Series["PhsCorr"].Points.SuspendUpdates();
+            chart1.Series["MagAmp"].Points.SuspendUpdates();
+            chart1.Series["PhsAmp"].Points.SuspendUpdates();
+
+            disp_data_Update(sampleCount, correctionPointCount);
+
+            chart1.Series["PhsAmp"].Points.ResumeUpdates();
+            chart1.Series["MagAmp"].Points.ResumeUpdates();
+            chart1.Series["PhsCorr"].Points.ResumeUpdates();
+            chart1.Series["MagCorr"].Points.ResumeUpdates();
+            chart1.Series["Ref"].Points.ResumeUpdates();
+            chart1.Series.ResumeUpdates();
+            chart1.Invalidate();
         }
 
         private void chkAVShowGain_CheckedChanged(object sender, EventArgs e)

@@ -847,7 +847,7 @@ namespace Thetis
                     lblFB.Text = "FB";
                 else
                     lblFB.Text = "Feedback";
-                lblPS.Text = "Pure Signal2";
+                lblPS.Text = "Pure Signal3";
             }
             else
             {
@@ -860,7 +860,7 @@ namespace Thetis
                     }
                     else
                     {
-                        lblPS.Text = "Pure Signal2";
+                        lblPS.Text = "Pure Signal3";
                         lblPS.BackColor = Color.FromArgb(255, Color.SeaGreen);
                     }
 
@@ -886,7 +886,7 @@ namespace Thetis
                     _lastColor = Color.SeaGreen;
                     _feedbackColour = Color.SeaGreen;
 
-                    lblPS.Text = "Pure Signal2";
+                    lblPS.Text = "Pure Signal3";
                     lblPS.BackColor = Color.FromArgb(255, Color.SeaGreen);
 
                     lblFB.BackColor = Color.SeaGreen;

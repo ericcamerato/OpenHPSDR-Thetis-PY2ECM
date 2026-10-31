@@ -100,7 +100,10 @@ void destroy_rcvr()
 	{
 		DestroyAnalyzer(i);
 		for (j = 0; j < pcm->cmSubRCVR; j++)
+		{
+			SetChannelState (chid (inid (0, i), j), 0, 1);
 			CloseChannel (chid (inid (0, i), j));
+		}
 		destroy_nob (pcm->rcvr[i].pnob);
 		destroy_anb (pcm->rcvr[i].panb);
 		for (j = 0; j < pcm->cmSubRCVR; j++)
@@ -262,6 +265,7 @@ void destroy_xmtr()
 		destroy_eer (pcm->xmtr[i].peer);
 		destroy_txgain (pcm->xmtr[i].pgain);
 		DestroyAnalyzer (inid (1, i));
+		SetChannelState (chid (inid (1, i), 0), 0, 1);
 		CloseChannel (chid (inid (1, i), 0));
 		destroy_aamix ((void *)(pcm->xmtr[i].pavoxmix), -1);
 		destroy_dexp (i);
@@ -423,6 +427,18 @@ PORT
 void SendpOutboundTCIRxIQ (void (*Outbound)(int id, int nsamples, double* buff))
 {
 	pcm->OutboundTCIRxIQ = Outbound;
+}
+
+PORT
+void SendpOutboundCwRxAudio (void (*Outbound)(int nsamples, double* buff))
+{
+	pcm->OutboundCwRxAudio = Outbound;
+}
+
+PORT
+void SetCwRxAudioRun (int active)
+{
+	_InterlockedExchange(&pcm->cw_rx_audio_run, active ? 1 : 0);
 }
 
 PORT

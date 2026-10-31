@@ -101,6 +101,10 @@ namespace Midi2Cat.Data
         NoiseReduction3OnOff = 113,
         [CatCommandAttribute("Noise Reduction 4 On Off", ControlType.Button, true)]
         NoiseReduction4OnOff = 114,
+        [CatCommandAttribute("Noise Reduction 5 On Off", ControlType.Button, true)]
+        NoiseReduction5OnOff = 316,
+        [CatCommandAttribute("Noise Reduction 6 On Off", ControlType.Button, true)]
+        NoiseReduction6OnOff = 317,
         [CatCommandAttribute("Noise Reduction 4 Amount", ControlType.Knob_or_Slider)]
         NoiseReduction4Amount = 115,
         [CatCommandAttribute("Binaural On Off", ControlType.Button, true)]  
@@ -407,6 +411,10 @@ namespace Midi2Cat.Data
         Rx2NoiseReduction3OnOff = 309,
         [CatCommandAttribute("Rx2 Noise Reduction 4 On Off", ControlType.Button, true)]
         Rx2NoiseReduction4OnOff = 310,
+        [CatCommandAttribute("Rx2 Noise Reduction 5 On Off", ControlType.Button, true)]
+        Rx2NoiseReduction5OnOff = 318,
+        [CatCommandAttribute("Rx2 Noise Reduction 6 On Off", ControlType.Button, true)]
+        Rx2NoiseReduction6OnOff = 319,
         [CatCommandAttribute("Rx2 Noise Reduction 4 Amount", ControlType.Knob_or_Slider)]
         Rx2NoiseReduction4Amount = 311,
         [CatCommandAttribute("Increase wheel rotation per VFO tune step", ControlType.Button)] 
