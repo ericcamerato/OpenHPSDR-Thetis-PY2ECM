@@ -20405,6 +20405,17 @@ namespace Thetis
         private int _display_fps_3d = 30;
         private bool _panafall3d_enabled;
         private double _display_delay = 1000 / 60f;
+        // High-FPS experiment only: caps spectrum generation without changing
+        // the display refresh or any audio/DSP processing rate.
+        private static readonly int _analyzerFpsCap = ReadAnalyzerFpsCap();
+
+        private static int ReadAnalyzerFpsCap()
+        {
+            int value;
+            return int.TryParse(Environment.GetEnvironmentVariable("THETIS_ANALYZER_FPS_CAP"),
+                out value) && value >= 1 && value <= MAX_FPS ? value : 0;
+        }
+
         public int DisplayFPS
         {
             get { return _display_fps; }
@@ -20449,6 +20460,8 @@ namespace Thetis
             Display.CurrentFPS = _display_fps;
 
             int wdspFps = (int)Math.Max(1, _display_fps * 1.1f);
+            if (_analyzerFpsCap > 0)
+                wdspFps = Math.Min(wdspFps, _analyzerFpsCap);
             if (specRX != null)
             {
                 specRX.GetSpecRX(0).FrameRate = wdspFps;
