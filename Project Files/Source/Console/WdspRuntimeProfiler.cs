@@ -41,6 +41,8 @@ namespace Thetis
         internal const int DisplayPanTraceGpuSelected = 20;
         internal const int DisplayPanGpuFillReused = 21;
         internal const int DisplayPanGpuFillRendered = 22;
+        internal const int DisplayPanTraceLoop = 23;
+        internal const int DisplayPanTraceGeometry = 24;
         private static readonly string[] DisplayNames = {
             "display_frame", "display_pan", "display_waterfall",
             "display_waterfall_prepare", "display_waterfall_row_upload", "display_present",
@@ -51,7 +53,8 @@ namespace Thetis
             "display_frame_gpu_selected", "display_frame_cpu_selected",
             "display_pan_trace_batch_selected", "display_pan_trace_current_selected",
             "display_pan_trace_gpu_selected",
-            "display_pan_gpu_fill_reused", "display_pan_gpu_fill_rendered"
+            "display_pan_gpu_fill_reused", "display_pan_gpu_fill_rendered",
+            "display_pan_trace_loop", "display_pan_trace_geometry"
         };
         private static readonly long[] displayTicks = new long[DisplayNames.Length];
         private static readonly long[] displayCounts = new long[DisplayNames.Length];

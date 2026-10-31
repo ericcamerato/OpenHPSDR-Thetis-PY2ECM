@@ -340,16 +340,40 @@ namespace Thetis
         }
 
         private static bool _bGetPixelsIssueRX1 = false;
+        // Diagnostic launch only: tolerate ordinary gaps when display FPS exceeds
+        // analyzer cadence, while still reporting a sustained lack of pixels.
+        private static readonly long _getPixelsWarningThresholdTicks =
+            GetPixelsWarningThresholdTicks();
+        private static long _lastPixelsReadyRX1 = Stopwatch.GetTimestamp();
+        private static long _lastPixelsReadyRX2 = Stopwatch.GetTimestamp();
+
+        private static long GetPixelsWarningThresholdTicks()
+        {
+            int milliseconds;
+            if (!int.TryParse(Environment.GetEnvironmentVariable("THETIS_GETPIXELS_WARNING_MS"),
+                out milliseconds) || milliseconds < 1 || milliseconds > 1000)
+                return 0;
+            return Math.Max(1L, Stopwatch.Frequency * milliseconds / 1000);
+        }
+
+        private static bool IsSustainedGetPixelsIssue(bool issue, ref long lastReady)
+        {
+            if (_getPixelsWarningThresholdTicks == 0) return issue;
+            long now = Stopwatch.GetTimestamp();
+            if (!issue) lastReady = now;
+            return issue && now - lastReady >= _getPixelsWarningThresholdTicks;
+        }
+
         public static bool GetPixelsIssueRX1
         {
             get { return _bGetPixelsIssueRX1; }
-            set { _bGetPixelsIssueRX1 = value; }
+            set { _bGetPixelsIssueRX1 = IsSustainedGetPixelsIssue(value, ref _lastPixelsReadyRX1); }
         }
         private static bool _bGetPixelsIssueRX2 = false;
         public static bool GetPixelsIssueRX2
         {
             get { return _bGetPixelsIssueRX2; }
-            set { _bGetPixelsIssueRX2 = value; }
+            set { _bGetPixelsIssueRX2 = IsSustainedGetPixelsIssue(value, ref _lastPixelsReadyRX2); }
         }
 
         private static bool m_bShowFrameRateIssue = true;
@@ -6225,6 +6249,8 @@ namespace Thetis
                 bool gpuPanTraceDrawn = false;
                 try
                 {
+                long traceLoopProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                    System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                 for (int i = 0; i < nDecimatedWidth; i++)
                 {
                     point.X = i * local_Decimation;
@@ -6372,6 +6398,10 @@ namespace Thetis
                         traceSink.AddLine(point);
                     previousPoint = point;
                 }
+                WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanTraceLoop,
+                    traceLoopProfileStart);
+                long traceGeometryProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
+                    System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                 gpuPanTraceDrawn = gpuPanTraceRequested && TryDrawGpuPanTrace(
                     nVerticalShift, W, H, data, nDecimatedWidth, local_Decimation,
                     grid_max, fOffset, dbmToPixel, line_width, lineBrush);
@@ -6389,6 +6419,8 @@ namespace Thetis
                     traceSink.Close();
                     _d2dRenderTarget.DrawGeometry(traceGeometry, lineBrush, line_width);
                 }
+                WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanTraceGeometry,
+                    traceGeometryProfileStart);
                 }
                 finally
                 {
