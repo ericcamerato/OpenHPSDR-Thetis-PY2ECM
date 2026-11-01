@@ -10,6 +10,7 @@ namespace Thetis
         private bool traceTestButton;
         private bool gpuTraceTestButton;
         private bool fillReuseTestButton;
+        private bool activePeakTraceTestButton;
 
         private void InitializeGpuWaterfallTestButton()
         {
@@ -19,6 +20,7 @@ namespace Thetis
             traceTestButton = Environment.GetEnvironmentVariable("THETIS_TRACE_TEST_BUTTON") == "1";
             gpuTraceTestButton = Environment.GetEnvironmentVariable("THETIS_GPU_TRACE_TEST_BUTTON") == "1";
             fillReuseTestButton = Environment.GetEnvironmentVariable("THETIS_FILL_REUSE_TEST_BUTTON") == "1";
+            activePeakTraceTestButton = Environment.GetEnvironmentVariable("THETIS_ACTIVE_PEAK_TEST_BUTTON") == "1";
 
             int top = chkFWCATU.Bottom + 1;
             btnGpuWaterfallTest = new ButtonTS
@@ -31,7 +33,9 @@ namespace Thetis
             };
             btnGpuWaterfallTest.Click += (sender, args) =>
             {
-                if (fillReuseTestButton)
+                if (activePeakTraceTestButton)
+                    Display.BatchActivePeakTraceEnabled = !Display.BatchActivePeakTraceEnabled;
+                else if (fillReuseTestButton)
                     Display.ReuseGpuPanFillOnDuplicateFrame =
                         !Display.ReuseGpuPanFillOnDuplicateFrame;
                 else if (gpuTraceTestButton)
@@ -50,6 +54,15 @@ namespace Thetis
         private void UpdateGpuWaterfallTestButton()
         {
             if (btnGpuWaterfallTest == null) return;
+            if (activePeakTraceTestButton)
+            {
+                bool batch = Display.BatchActivePeakTraceEnabled;
+                btnGpuWaterfallTest.Text = batch ? "PICO LOTE" : "PICO ATUAL";
+                toolTip1.SetToolTip(btnGpuWaterfallTest,
+                    batch ? "Active Peak Hold em uma geometria por quadro. Clique para voltar ao desenho atual."
+                          : "Active Peak Hold com linhas individuais. Clique para testar a geometria em lote.");
+                return;
+            }
             if (fillReuseTestButton)
             {
                 bool reuse = Display.ReuseGpuPanFillOnDuplicateFrame;

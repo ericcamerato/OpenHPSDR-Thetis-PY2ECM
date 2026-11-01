@@ -4153,6 +4153,13 @@ namespace Thetis
             get { return _batchPanTraceEnabled; }
             set { _batchPanTraceEnabled = value; }
         }
+        private static volatile bool _batchActivePeakTraceEnabled =
+            Environment.GetEnvironmentVariable("THETIS_ACTIVE_PEAK_BATCH") == "1";
+        public static bool BatchActivePeakTraceEnabled
+        {
+            get { return _batchActivePeakTraceEnabled; }
+            set { _batchActivePeakTraceEnabled = value; }
+        }
         private static volatile bool _gpuPanTraceEnabled =
             Environment.GetEnvironmentVariable("THETIS_PAN_TRACE_GPU") == "1";
         public static bool GpuPanTraceEnabled
@@ -6240,6 +6247,17 @@ namespace Thetis
                 }
                 SharpDX.Direct2D1.PathGeometry traceGeometry = null;
                 SharpDX.Direct2D1.GeometrySink traceSink = null;
+                SharpDX.Direct2D1.PathGeometry activePeakGeometry = null;
+                SharpDX.Direct2D1.GeometrySink activePeakSink = null;
+                bool batchActivePeakTrace = _batchActivePeakTraceEnabled &&
+                    bSpectralPeakHold && !bActivePeakFill && gpuPanFillDrawn && !draw3D;
+                if (batchActivePeakTrace)
+                {
+                    activePeakGeometry = new SharpDX.Direct2D1.PathGeometry(_d2dRenderTarget.Factory);
+                    activePeakSink = activePeakGeometry.Open();
+                    activePeakSink.BeginFigure(oldSpectralPeakPoint,
+                        SharpDX.Direct2D1.FigureBegin.Hollow);
+                }
                 if (!_legacyPanTrace && !gpuPanTraceRequested)
                 {
                     traceGeometry = new SharpDX.Direct2D1.PathGeometry(_d2dRenderTarget.Factory);
@@ -6355,7 +6373,10 @@ namespace Thetis
                             }
                             else
                             {
-                                _d2dRenderTarget.DrawLine(oldSpectralPeakPoint, spectralPeakPoint, fillPeaksBrush, line_width);
+                                if (batchActivePeakTrace)
+                                    activePeakSink.AddLine(spectralPeakPoint);
+                                else
+                                    _d2dRenderTarget.DrawLine(oldSpectralPeakPoint, spectralPeakPoint, fillPeaksBrush, line_width);
                                 oldSpectralPeakPoint = spectralPeakPoint;
                             }
 
@@ -6402,6 +6423,14 @@ namespace Thetis
                     traceLoopProfileStart);
                 long traceGeometryProfileStart = WdspRuntimeProfiler.DisplayEnabled ?
                     System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                if (activePeakSink != null)
+                {
+                    activePeakSink.EndFigure(SharpDX.Direct2D1.FigureEnd.Open);
+                    activePeakSink.Close();
+                    activePeakSink.Dispose();
+                    activePeakSink = null;
+                    _d2dRenderTarget.DrawGeometry(activePeakGeometry, fillPeaksBrush, line_width);
+                }
                 gpuPanTraceDrawn = gpuPanTraceRequested && TryDrawGpuPanTrace(
                     nVerticalShift, W, H, data, nDecimatedWidth, local_Decimation,
                     grid_max, fOffset, dbmToPixel, line_width, lineBrush);
@@ -6426,6 +6455,8 @@ namespace Thetis
                 {
                     if (traceSink != null) traceSink.Dispose();
                     if (traceGeometry != null) traceGeometry.Dispose();
+                    if (activePeakSink != null) activePeakSink.Dispose();
+                    if (activePeakGeometry != null) activePeakGeometry.Dispose();
                 }
                 WdspRuntimeProfiler.RecordDisplay(WdspRuntimeProfiler.DisplayPanTrace,
                     traceProfileStart);
