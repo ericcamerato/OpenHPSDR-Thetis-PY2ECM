@@ -20405,9 +20405,19 @@ namespace Thetis
         private int _display_fps_3d = 30;
         private bool _panafall3d_enabled;
         private double _display_delay = 1000 / 60f;
-        // Personal High-FPS build: keep the measured spectrum cadence while the
-        // display refresh remains independently configurable. Audio/DSP is unchanged.
-        private const int _analyzerFpsCap = 41;
+        private bool _cpuEfficientDisplay;
+        public bool CpuEfficientDisplay
+        {
+            get { return _cpuEfficientDisplay; }
+            set
+            {
+                if (_cpuEfficientDisplay == value) return;
+                _cpuEfficientDisplay = value;
+                Display.BatchActivePeakTraceEnabled = value;
+                Display.FilterExpectedAnalyzerGaps = value;
+                ApplyActiveDisplayFPS();
+            }
+        }
 
         public int DisplayFPS
         {
@@ -20453,8 +20463,8 @@ namespace Thetis
             Display.CurrentFPS = _display_fps;
 
             int wdspFps = (int)Math.Max(1, _display_fps * 1.1f);
-            if (_analyzerFpsCap > 0)
-                wdspFps = Math.Min(wdspFps, _analyzerFpsCap);
+            if (_cpuEfficientDisplay)
+                wdspFps = Math.Min(wdspFps, 41);
             if (specRX != null)
             {
                 specRX.GetSpecRX(0).FrameRate = wdspFps;

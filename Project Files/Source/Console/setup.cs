@@ -137,6 +137,7 @@ namespace Thetis
             this.Owner = c;
 
             InitializeUltrawideDisplayControl();
+            InitializeCpuEfficientDisplayControl();
             Initialize3DDisplayColorControls();
             Initialize3DViewControls();
             InitializeNNRControls();
@@ -149,6 +150,34 @@ namespace Thetis
         }
 
         private CheckBoxTS chkUltrawideDisplay;
+        private CheckBoxTS chkCpuEfficientDisplay;
+
+        private void InitializeCpuEfficientDisplayControl()
+        {
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = "grpSpectrumPerformance",
+                Text = "Spectrum performance",
+                Location = new Point(394, 148),
+                Size = new Size(166, 66)
+            };
+            chkCpuEfficientDisplay = new CheckBoxTS
+            {
+                Name = "chkCpuEfficientDisplay",
+                Text = "Reduce spectrum CPU use",
+                Location = new Point(8, 19),
+                Size = new Size(150, 36)
+            };
+            group.Controls.Add(chkCpuEfficientDisplay);
+            tpDisplayGeneral.Controls.Add(group);
+            group.BringToFront();
+            toolTip1.SetToolTip(chkCpuEfficientDisplay,
+                "Caps spectrum analyzer updates at 41 per second while leaving display FPS independent, " +
+                "and batches the Active Peak Hold trace. Uncheck for Beta 1 display behavior. " +
+                "Audio and WDSP processing are unchanged.");
+            chkCpuEfficientDisplay.CheckedChanged += (sender, args) =>
+                console.CpuEfficientDisplay = chkCpuEfficientDisplay.Checked;
+        }
 
         private void InitializeUltrawideDisplayControl()
         {
@@ -2182,6 +2211,9 @@ namespace Thetis
             if (!a.ContainsKey(nud3DFloor.Name)) new3DSettingsMissing++;
             if (!a.ContainsKey(nud3DGain.Name)) new3DSettingsMissing++;
             if (!a.ContainsKey(nud3DSpan.Name)) new3DSettingsMissing++;
+            // Existing Beta 1 databases do not have this opt-in control. Do not
+            // interpret its absence as a reason to reset unrelated settings.
+            if (!a.ContainsKey(chkCpuEfficientDisplay.Name)) new3DSettingsMissing++;
             if (a.Count < controls.Count - new3DSettingsMissing)		// some established control values are not in the database
             {								    // so set all of them to the defaults
                 InitGeneralTab(recoveryList);

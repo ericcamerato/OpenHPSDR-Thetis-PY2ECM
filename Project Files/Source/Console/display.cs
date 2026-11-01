@@ -344,11 +344,18 @@ namespace Thetis
         // lack of pixels, not an expected gap between spectrum updates.
         private static readonly long _getPixelsWarningThresholdTicks =
             Math.Max(1L, Stopwatch.Frequency / 10);
+        private static volatile bool _filterExpectedAnalyzerGaps;
+        public static bool FilterExpectedAnalyzerGaps
+        {
+            get { return _filterExpectedAnalyzerGaps; }
+            set { _filterExpectedAnalyzerGaps = value; }
+        }
         private static long _lastPixelsReadyRX1 = Stopwatch.GetTimestamp();
         private static long _lastPixelsReadyRX2 = Stopwatch.GetTimestamp();
 
         private static bool IsSustainedGetPixelsIssue(bool issue, ref long lastReady)
         {
+            if (!_filterExpectedAnalyzerGaps) return issue;
             long now = Stopwatch.GetTimestamp();
             if (!issue) lastReady = now;
             return issue && now - lastReady >= _getPixelsWarningThresholdTicks;
@@ -4143,7 +4150,7 @@ namespace Thetis
             get { return _batchPanTraceEnabled; }
             set { _batchPanTraceEnabled = value; }
         }
-        private static volatile bool _batchActivePeakTraceEnabled = true;
+        private static volatile bool _batchActivePeakTraceEnabled;
         public static bool BatchActivePeakTraceEnabled
         {
             get { return _batchActivePeakTraceEnabled; }
