@@ -340,25 +340,15 @@ namespace Thetis
         }
 
         private static bool _bGetPixelsIssueRX1 = false;
-        // Diagnostic launch only: tolerate ordinary gaps when display FPS exceeds
-        // analyzer cadence, while still reporting a sustained lack of pixels.
+        // The display may run faster than the analyzer; warn only on a sustained
+        // lack of pixels, not an expected gap between spectrum updates.
         private static readonly long _getPixelsWarningThresholdTicks =
-            GetPixelsWarningThresholdTicks();
+            Math.Max(1L, Stopwatch.Frequency / 10);
         private static long _lastPixelsReadyRX1 = Stopwatch.GetTimestamp();
         private static long _lastPixelsReadyRX2 = Stopwatch.GetTimestamp();
 
-        private static long GetPixelsWarningThresholdTicks()
-        {
-            int milliseconds;
-            if (!int.TryParse(Environment.GetEnvironmentVariable("THETIS_GETPIXELS_WARNING_MS"),
-                out milliseconds) || milliseconds < 1 || milliseconds > 1000)
-                return 0;
-            return Math.Max(1L, Stopwatch.Frequency * milliseconds / 1000);
-        }
-
         private static bool IsSustainedGetPixelsIssue(bool issue, ref long lastReady)
         {
-            if (_getPixelsWarningThresholdTicks == 0) return issue;
             long now = Stopwatch.GetTimestamp();
             if (!issue) lastReady = now;
             return issue && now - lastReady >= _getPixelsWarningThresholdTicks;
@@ -4153,8 +4143,7 @@ namespace Thetis
             get { return _batchPanTraceEnabled; }
             set { _batchPanTraceEnabled = value; }
         }
-        private static volatile bool _batchActivePeakTraceEnabled =
-            Environment.GetEnvironmentVariable("THETIS_ACTIVE_PEAK_BATCH") == "1";
+        private static volatile bool _batchActivePeakTraceEnabled = true;
         public static bool BatchActivePeakTraceEnabled
         {
             get { return _batchActivePeakTraceEnabled; }
