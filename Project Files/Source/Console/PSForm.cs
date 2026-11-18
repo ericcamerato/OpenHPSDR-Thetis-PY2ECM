@@ -256,6 +256,7 @@ namespace Thetis
             get { return _psenabled; }
             set
             {
+                if (value && console.Hl2ReducedDdcMode) return;
                 _psenabled = value;
 
                 if (_psenabled)
@@ -293,6 +294,7 @@ namespace Thetis
             get { return _autocal_enabled; }
             set
             {
+                if (value && console.Hl2ReducedDdcMode) return;
                 _autocal_enabled = value;
                 if (_autocal_enabled)
                 {

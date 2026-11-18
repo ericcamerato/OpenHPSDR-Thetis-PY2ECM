@@ -846,6 +846,13 @@ namespace Thetis
                     local_rx2Enabled = bool.Parse(d["chkRX2"]);
                 else
                     local_rx2Enabled = false;
+
+                foreach (string entry in DB.GetVars("PY2ECM_HL2_DDC"))
+                {
+                    if (entry == "count/1") hl2DdcCount = 1;
+                    else if (entry == "count/2") hl2DdcCount = 2;
+                    else if (entry == "count/4") hl2DdcCount = 4;
+                }
             }
             //END_TODO !!!!!!!!!!!!!!
 
@@ -8331,6 +8338,13 @@ namespace Thetis
             if (string.IsNullOrEmpty(comboFMTXProfile.Text)) comboFMTXProfile.Text = "Default";
             if (string.IsNullOrEmpty(comboAMTXProfile.Text)) comboAMTXProfile.Text = "Default";
         }
+        private int hl2DdcCount = 4;
+
+        public bool Hl2ReducedDdcMode
+        {
+            get { return HardwareSpecific.Model == HPSDRModel.HERMESLITE && hl2DdcCount < 4; }
+        }
+
         // Diversity operation is on RX1; therefore, the 'rx1_rate' will be used as the diversity rate;
         public void UpdateDDCs(bool rx2_enabled)
         {
@@ -8531,6 +8545,18 @@ namespace Thetis
                 case HPSDRModel.HERMESLITE:     // MI0BOT: HL2
                 case HPSDRModel.ANAN10:
                 case HPSDRModel.ANAN100:
+                    if (hpsdr_model == HPSDRModel.HERMESLITE && hl2DdcCount < 4)
+                    {
+                        // Protocol 1 C4 advertises nddc; the receive demultiplexer
+                        // must use the same value. PureSignal is unavailable here.
+                        P1_rxcount = nddc = hl2DdcCount;
+                        P1_DDCConfig = hl2DdcCount == 1 ? 4 : 5;
+                        DDCEnable = hl2DdcCount == 1 ? DDC0 : DDC0 + DDC1;
+                        Rate[0] = rx1_rate;
+                        if (hl2DdcCount == 2) Rate[1] = rx1_rate;
+                        cntrl1 = cntrl2 = 0;
+                        break;
+                    }
                     P1_rxcount = 4;                     // RX4 used for puresignal feedback
                     nddc = 4;
                     if (!_mox)
@@ -8693,6 +8719,8 @@ namespace Thetis
             NetworkIO.SetADC_cntrl2(cntrl2);
             NetworkIO.CmdRx();
             NetworkIO.Protocol1DDCConfig(P1_DDCConfig, P1_diversity, P1_rxcount, nddc);
+
+            UpdateHl2DdcControls();
 
             //MW0LGE_21e
             if (!IsSetupFormNull) SetupForm.UpdateDDCTab();
@@ -8955,6 +8983,12 @@ namespace Thetis
             if (MOX && rx1 == -1 && pstx != -1) rx1 = pstx;
 
             if (rx2 == -1) rx2 = rx1;
+
+            if (Hl2ReducedDdcMode)
+            {
+                rx2 = rx1;
+                psrx = pstx = -1;
+            }
 
             DDCrx1 = rx1;
             DDCrx2 = rx2;
@@ -10903,6 +10937,7 @@ namespace Thetis
             get { return _diversity2; }
             set
             {
+                if (value && Hl2ReducedDdcMode) return;
                 _diversity2 = value;
                 AndromedaIndicatorCheck(EIndicatorActions.eINDiversityEnabled, false, _diversity2);
                 if (_diversity2)
@@ -28013,6 +28048,14 @@ namespace Thetis
 
             if (chkPower.Checked)
             {
+                if (Hl2ReducedDdcMode)
+                {
+                    if (chkRX2.Checked) chkRX2.Checked = false;
+                    if (chkEnableMultiRX.Checked) chkEnableMultiRX.Checked = false;
+                    if (chkFWCATUBypass.Checked) chkFWCATUBypass.Checked = false;
+                    if (psform.PSEnabled) psform.PSEnabled = false;
+                    if (Diversity2) Diversity2 = false;
+                }
                 chkPower.BackColor = button_selected_color;
                 txtVFOAFreq.ForeColor = vfo_text_light_color;
                 txtVFOAMSD.ForeColor = vfo_text_light_color;
@@ -37721,6 +37764,11 @@ namespace Thetis
         }
         unsafe private void chkEnableMultiRX_CheckedChanged(object sender, System.EventArgs e)
         {
+            if (chkEnableMultiRX.Checked && Hl2ReducedDdcMode)
+            {
+                chkEnableMultiRX.Checked = false;
+                return;
+            }
             //[2.10.3.5]MW0LGE
             if (!initializing) radio.GetDSPRX(0, 1).Active = chkEnableMultiRX.Checked; //MW0LGE only set after init complete
                                                                                        //for some reason fixes issue where multirx has no audio if
@@ -38431,6 +38479,7 @@ namespace Thetis
             get { return rx2_enabled; }
             set
             {
+                if (value && Hl2ReducedDdcMode) value = false;
                 rx2_enabled = value;
                 if (DataFlowing)
                 {
@@ -38571,6 +38620,11 @@ namespace Thetis
         private bool _old_rx2_checked = false;
         private void chkRX2_CheckedChanged(object sender, System.EventArgs e)
         {
+            if (chkRX2.Checked && Hl2ReducedDdcMode)
+            {
+                chkRX2.Checked = false;
+                return;
+            }
             _pause_DisplayThread = true; //MW0LGE_21k8 hide the changes
 
             bool oldRX2Enabled = _old_rx2_checked;// RX2Enabled;
@@ -45469,6 +45523,12 @@ namespace Thetis
         {
             //PS-A button
 
+            if (chkFWCATUBypass.Checked && Hl2ReducedDdcMode)
+            {
+                chkFWCATUBypass.Checked = false;
+                return;
+            }
+
             bool oldState = psform.AutoCalEnabled;
             psform.AutoCalEnabled = chkFWCATUBypass.Checked;
             AndromedaIndicatorCheck(EIndicatorActions.eINPuresignalEnabled, false, chkFWCATUBypass.Checked);
@@ -46310,6 +46370,108 @@ namespace Thetis
                     return true;
             }
             return base.ProcessDialogKey(keyData);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.Shift | Keys.D) &&
+                HardwareSpecific.Model == HPSDRModel.HERMESLITE)
+            {
+                ShowHl2DdcConfiguration();
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void ShowHl2DdcConfiguration()
+        {
+            using (Form dialog = new Form())
+            using (ComboBox count = new ComboBox())
+            using (Label explanation = new Label())
+            using (Button apply = new Button())
+            using (Button cancel = new Button())
+            using (Button restore = new Button())
+            {
+                dialog.Text = "Hermes Lite 2 — Advanced DDC Configuration";
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.MaximizeBox = false;
+                dialog.MinimizeBox = false;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.ClientSize = new Size(390, 154);
+
+                count.DropDownStyle = ComboBoxStyle.DropDownList;
+                count.Items.AddRange(new object[] { "1 DDC — RX1 only", "2 DDCs — RX1 only", "4 DDCs — full compatibility" });
+                count.SelectedIndex = hl2DdcCount == 1 ? 0 : hl2DdcCount == 2 ? 1 : 2;
+                count.SetBounds(15, 15, 360, 25);
+
+                explanation.Text = "PureSignal, RX2, MultiRX and diversity require 4 DDCs.\r\nChanging this setting restarts the radio connection.";
+                explanation.SetBounds(15, 48, 360, 42);
+
+                restore.Text = "Restore Default";
+                restore.SetBounds(15, 108, 115, 28);
+                restore.Click += (sender, args) => count.SelectedIndex = 2;
+                apply.Text = "Apply";
+                apply.SetBounds(220, 108, 75, 28);
+                apply.DialogResult = DialogResult.OK;
+                cancel.Text = "Cancel";
+                cancel.SetBounds(300, 108, 75, 28);
+                cancel.DialogResult = DialogResult.Cancel;
+
+                dialog.Controls.AddRange(new Control[] { count, explanation, restore, apply, cancel });
+                dialog.AcceptButton = apply;
+                dialog.CancelButton = cancel;
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    ApplyHl2DdcCount(count.SelectedIndex == 0 ? 1 : count.SelectedIndex == 1 ? 2 : 4);
+            }
+        }
+
+        private void ApplyHl2DdcCount(int requested)
+        {
+            if (HardwareSpecific.Model != HPSDRModel.HERMESLITE ||
+                (requested != 1 && requested != 2 && requested != 4) || requested == hl2DdcCount) return;
+            if (MOX || TUN || _mox || _tuning)
+            {
+                MessageBox.Show(this, "Stop transmitting before changing the DDC count.",
+                    "Hermes Lite 2 DDC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int previous = hl2DdcCount;
+            bool wasOn = PowerOn;
+            try
+            {
+                if (wasOn) PowerOn = false;
+                if (requested < 4)
+                {
+                    ForcePureSignalAutoCalDisable();
+                    psform.PSEnabled = false;
+                    if (Diversity2) Diversity2 = false;
+                    if (chkEnableMultiRX.Checked) chkEnableMultiRX.Checked = false;
+                    if (RX2Enabled) RX2Enabled = false;
+                }
+                hl2DdcCount = requested;
+                UpdateHl2DdcControls();
+                if (wasOn) PowerOn = true;
+                if (wasOn && !PowerOn) throw new InvalidOperationException("The radio did not restart.");
+                DB.SaveVars("PY2ECM_HL2_DDC", new List<string> { "count/" + requested }, true);
+            }
+            catch (Exception error)
+            {
+                if (PowerOn) PowerOn = false;
+                hl2DdcCount = previous;
+                UpdateHl2DdcControls();
+                try { if (wasOn) PowerOn = true; } catch { /* Leave radio safely stopped. */ }
+                MessageBox.Show(this, "The DDC change was not saved. Previous mode restored.\r\n" + error.Message,
+                    "Hermes Lite 2 DDC", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdateHl2DdcControls()
+        {
+            bool enabled = !Hl2ReducedDdcMode;
+            chkRX2.Enabled = enabled;
+            chkEnableMultiRX.Enabled = enabled;
+            chkFWCATUBypass.Enabled = enabled;
         }
         //--
         private bool checkVersions()

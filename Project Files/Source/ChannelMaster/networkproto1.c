@@ -382,6 +382,9 @@ void MetisReadThreadMainLoop(void)
 							// WriteAudio(30.0, 48000, spr, prn->RxBuff[0], 3);
 							switch (nddc)
 							{
+							case 1:
+								xrouter(0, 0, 0, spr, prn->RxBuff[0]);
+								break;
 							case 2:
 								twist(spr, 0, 1, 0);
 								break;
@@ -548,6 +551,9 @@ void MetisReadThreadMainLoop_HL2(void)
 							// WriteAudio(30.0, 48000, spr, prn->RxBuff[0], 3);
 							switch (nddc)
 							{
+							case 1:
+								xrouter(0, 0, 0, spr, prn->RxBuff[0]);
+								break;
 							case 2:
 								twist(spr, 0, 1, 0);
 								break;
