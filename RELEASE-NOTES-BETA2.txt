@@ -26,7 +26,7 @@ INSTALLATION
 - The portable ZIP can be extracted to a separate folder. Its user-data
   folder initially contains no settings and stores them beside the application.
 - Neither package contains a personal database, profiles, memories, logs,
-  private launch scripts or Lextel meter integration.
+  private launch scripts or external meter integration.
 - Requires Windows x64, .NET Framework 4.8 and the usual radio/audio drivers.
 
 VALIDATION AND LIMITATIONS
