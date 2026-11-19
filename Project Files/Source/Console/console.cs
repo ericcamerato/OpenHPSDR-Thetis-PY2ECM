@@ -46398,24 +46398,24 @@ namespace Thetis
                 dialog.MaximizeBox = false;
                 dialog.MinimizeBox = false;
                 dialog.StartPosition = FormStartPosition.CenterParent;
-                dialog.ClientSize = new Size(390, 154);
+                dialog.ClientSize = new Size(390, 178);
 
                 count.DropDownStyle = ComboBoxStyle.DropDownList;
                 count.Items.AddRange(new object[] { "1 DDC — RX1 only", "2 DDCs — RX1 only", "4 DDCs — full compatibility" });
                 count.SelectedIndex = hl2DdcCount == 1 ? 0 : hl2DdcCount == 2 ? 1 : 2;
                 count.SetBounds(15, 15, 360, 25);
 
-                explanation.Text = "PureSignal, RX2, MultiRX and diversity require 4 DDCs.\r\nChanging this setting restarts the radio connection.";
-                explanation.SetBounds(15, 48, 360, 42);
+                explanation.Text = "Experimental: reduced modes have not been tested on hardware.\r\nPureSignal, RX2, MultiRX and diversity require 4 DDCs.\r\nChanging this setting restarts the radio connection.";
+                explanation.SetBounds(15, 48, 360, 62);
 
                 restore.Text = "Restore Default";
-                restore.SetBounds(15, 108, 115, 28);
+                restore.SetBounds(15, 132, 115, 28);
                 restore.Click += (sender, args) => count.SelectedIndex = 2;
                 apply.Text = "Apply";
-                apply.SetBounds(220, 108, 75, 28);
+                apply.SetBounds(220, 132, 75, 28);
                 apply.DialogResult = DialogResult.OK;
                 cancel.Text = "Cancel";
-                cancel.SetBounds(300, 108, 75, 28);
+                cancel.SetBounds(300, 132, 75, 28);
                 cancel.DialogResult = DialogResult.Cancel;
 
                 dialog.Controls.AddRange(new Control[] { count, explanation, restore, apply, cancel });
