@@ -1,0 +1,44 @@
+THETIS PY2ECM 2.10.4.1 BETA 2 (x64)
+==================================
+
+This is an experimental Windows x64 release for the Hermes Lite 2 / HL2+.
+It is a PY2ECM modification of Thetis, not an official upstream or MI0BOT
+release. WDSP 2.11 is included.
+
+HIGHLIGHTS SINCE BETA 1
+
+- Added an optional CPU-efficient spectrum display mode. It limits analyzer
+  updates to 41 per second independently of the display frame rate and batches
+  the active peak trace. Audio and WDSP processing are unchanged by this option.
+- Improved high-frame-rate display handling and reduced expected analyzer-gap
+  indications. Actual CPU/GPU gains depend on the system and display settings.
+- Added experimental Hermes Lite 2 DDC-count selection. Four DDCs remain the
+  default and retain the existing RX2, MultiRX and PureSignal behavior. Reduced
+  modes request one or two DDC streams from Protocol 1 and disable those
+  additional receiver and feedback functions. No other radio model is changed.
+- Kept the Hermes Lite 2 PureSignal sample-rate exception, including 384 kHz,
+  in the unchanged four-DDC path.
+
+INSTALLATION
+
+- The MSI installs in its own Beta 2 folder. It does not replace Beta 1 or a
+  separate personal Thetis installation.
+- The portable ZIP can be extracted to a separate folder. Its user-data
+  folder initially contains no settings and stores them beside the application.
+- Neither package contains a personal database, profiles, memories, logs,
+  private launch scripts or Lextel meter integration.
+- Requires Windows x64, .NET Framework 4.8 and the usual radio/audio drivers.
+
+VALIDATION AND LIMITATIONS
+
+- Release x64 compilation completed. Physical Hermes Lite 2 RX/TX validation
+  of the reduced-DDC modes has been deferred. They are experimental; retain
+  four DDCs for normal operation until independently validated.
+- Do not assume a lower DDC count improves audio latency. CPU and Ethernet
+  traffic changes require measurement at the same sample rate and settings.
+- The MSI is unsigned and does not install external drivers.
+- Back up settings before upgrading. Verify PA Gain, Drive, attenuation,
+  PureSignal and RF output into a suitable load before normal transmission.
+
+Project and third-party licenses accompany the application. This beta is
+provided without warranty of transmission performance.

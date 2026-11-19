@@ -1,0 +1,2 @@
+This folder is reserved for the portable Thetis database and user settings.
+It contains no personal settings in the distributed ZIP.
