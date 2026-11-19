@@ -8339,6 +8339,7 @@ namespace Thetis
             if (string.IsNullOrEmpty(comboAMTXProfile.Text)) comboAMTXProfile.Text = "Default";
         }
         private int hl2DdcCount = 4;
+        private bool hl2DdcControlsForcedOff;
 
         public bool Hl2ReducedDdcMode
         {
@@ -46468,10 +46469,20 @@ namespace Thetis
 
         private void UpdateHl2DdcControls()
         {
-            bool enabled = !Hl2ReducedDdcMode;
-            chkRX2.Enabled = enabled;
-            chkEnableMultiRX.Enabled = enabled;
-            chkFWCATUBypass.Enabled = enabled;
+            if (Hl2ReducedDdcMode)
+            {
+                chkRX2.Enabled = false;
+                chkEnableMultiRX.Enabled = false;
+                chkFWCATUBypass.Enabled = false;
+                hl2DdcControlsForcedOff = true;
+            }
+            else if (hl2DdcControlsForcedOff)
+            {
+                chkRX2.Enabled = true;
+                chkEnableMultiRX.Enabled = true;
+                chkFWCATUBypass.Enabled = true;
+                hl2DdcControlsForcedOff = false;
+            }
         }
         //--
         private bool checkVersions()
