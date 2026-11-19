@@ -1478,26 +1478,6 @@ namespace Thetis
         // ======================================================
         // Main
         // ======================================================
-        private static string[] AddCrispDefaults(string[] args)
-        {
-            var result = new List<string>(args);
-            if (!result.Any(a => a.StartsWith("-dbid:", StringComparison.OrdinalIgnoreCase)))
-                result.Add("-dbid:PY2ECM-WDSP210");
-            if (!result.Any(a => string.Equals(a, "-cmasioconfig", StringComparison.OrdinalIgnoreCase)))
-                result.Add("-cmasioconfig");
-            if (!result.Any(a => a.StartsWith("-datapath:", StringComparison.OrdinalIgnoreCase)))
-            {
-                string portableData = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "user-data");
-                string dataPath = Directory.Exists(portableData)
-                    ? portableData
-                    : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "OpenHPSDR", "Thetis-PY2ECM-Crisp-2.10.4.1");
-                Directory.CreateDirectory(dataPath);
-                result.Add("-datapath:" + dataPath);
-            }
-            return result.ToArray();
-        }
-
         [STAThread]
         static void Main(string[] args)
         {
@@ -1515,8 +1495,6 @@ namespace Thetis
             {
                 if (showHelpInfo()) return;  // if we can show, instantly exit
             }
-
-            args = AddCrispDefaults(args);
 
             //[2.10.3.12]MW0LGE command line adaptor select
             if (Common.HasArg(args, "-adaptor"))
