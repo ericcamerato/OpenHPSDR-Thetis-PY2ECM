@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Thetis PY2ECM 2.10.4.1 Beta 3 x64" Language="1033" Version="2.10.4" Manufacturer="PY2ECM" UpgradeCode="DB5C14F6-220D-4A41-AD99-63536023C0DE">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" Description="Thetis PY2ECM 2.10.4.1 Beta 3 x64" />
+    <MajorUpgrade DowngradeErrorMessage="A newer Beta 3 is already installed." Schedule="afterInstallExecute" />
+    <MediaTemplate EmbedCab="yes" />
+    <Feature Id="MainFeature" Title="Thetis PY2ECM Beta 3" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="DesktopLink" />
+      <ComponentRef Id="MenuLink" />
+    </Feature>
+  </Product>
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="OpenHPSDRFolder" Name="OpenHPSDR">
+          <Directory Id="INSTALLFOLDER" Name="Thetis-PY2ECM-2.10.4.1-Beta3" />
+        </Directory>
+      </Directory>
+      <Directory Id="CommonDesktopFolder" />
+      <Directory Id="CommonProgramsFolder">
+        <Directory Id="MenuFolder" Name="Thetis PY2ECM Beta 3" />
+      </Directory>
+    </Directory>
+  </Fragment>
+  <Fragment>
+    <DirectoryRef Id="CommonDesktopFolder">
+      <Component Id="DesktopLink" Guid="69802C12-2B58-4615-9F2B-ED6E3574748E" Win64="yes">
+        <Shortcut Id="DesktopShortcut" Name="Thetis PY2ECM 2.10.4.1 Beta 3" Description="Start Thetis PY2ECM Beta 3" Target="[INSTALLFOLDER]Thetis.exe" WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKLM" Key="Software\PY2ECM\ThetisBeta321041" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <DirectoryRef Id="MenuFolder">
+      <Component Id="MenuLink" Guid="CEF78344-3A9E-4FCF-AD16-DC1DEF018078" Win64="yes">
+        <Shortcut Id="MenuShortcut" Name="Thetis PY2ECM 2.10.4.1 Beta 3" Target="[INSTALLFOLDER]Thetis.exe" WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKLM" Key="Software\PY2ECM\ThetisBeta321041" Name="MenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

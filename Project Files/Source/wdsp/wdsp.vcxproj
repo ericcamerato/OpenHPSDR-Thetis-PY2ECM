@@ -332,6 +332,7 @@
     <ClCompile Include="nnet.c" />
     <ClCompile Include="nnio.c" />
     <ClCompile Include="nnr.c" />
+    <ClCompile Include="dfnr.c" />
     <ClCompile Include="nnrbypass.c" />
     <ClCompile Include="nnr_model_0.c" />
     <ClCompile Include="nnr_model_1.c" />

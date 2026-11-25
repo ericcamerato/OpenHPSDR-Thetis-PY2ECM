@@ -105,6 +105,8 @@ namespace Thetis
         // WDSP 2.11 NNR controls are created here instead of in the generated
         // designer file to keep the PY2ECM changes small and merge-friendly.
         private readonly NumericUpDownTS[,] nudNNR = new NumericUpDownTS[2, 7];
+        private readonly NumericUpDownTS[,] nudNR7 = new NumericUpDownTS[2, 2];
+        private TabPage tpDSPNR7;
         // Mode 0: all Classic 3D views; mode 1: all new 3D views.
         // Keep the existing control names so saved appearance settings still load.
         private readonly CheckBoxTS[,] chk3DColorOverride = new CheckBoxTS[2, 2];
@@ -141,6 +143,7 @@ namespace Thetis
             Initialize3DDisplayColorControls();
             Initialize3DViewControls();
             InitializeNNRControls();
+            InitializeNR7Controls();
 
             _frmBandwidth = new frmBandwidth();
 
@@ -564,6 +567,124 @@ namespace Thetis
                 rx.RXANNRTau = (double)nudNNR[receiver, 4].Value;
                 rx.SetRXANNRSmooth((double)nudNNR[receiver, 5].Value,
                                   (double)nudNNR[receiver, 6].Value);
+            }
+        }
+
+        private void InitializeNR7Controls()
+        {
+            tpDSPNR7 = new TabPage
+            {
+                Name = "tpDSPNR7",
+                Text = "NR7",
+                BackColor = SystemColors.Control,
+                Padding = new Padding(3)
+            };
+            Common.TabControlInsert(tcDSP, tpDSPNR7, tcDSP.TabPages.IndexOf(tpDSPNNR) + 1);
+            tpDSPNR7.Controls.Add(new LabelTS
+            {
+                Name = "lblNR7Description",
+                Location = new Point(10, 8),
+                Size = new Size(700, 34),
+                Text = "DeepFilterNet3 speech denoiser (48 kHz RX). Settings apply live; NR7 is bypassed in CW, digital and FM modes."
+            });
+            tpDSPNR7.Controls.Add(CreateNR7Group(0, 8));
+            tpDSPNR7.Controls.Add(CreateNR7Group(1, 360));
+        }
+
+        private GroupBoxTS CreateNR7Group(int receiver, int left)
+        {
+            string suffix = receiver == 0 ? "RX1" : "RX2";
+            GroupBoxTS group = new GroupBoxTS
+            {
+                Name = "grpNR7" + suffix,
+                Text = "NR7 " + suffix,
+                Location = new Point(left, 45),
+                Size = new Size(344, 210)
+            };
+            string[] labels = { "Attenuation limit", "Post-filter strength" };
+            string[] names = { "udNR7Attenuation", "udNR7PostFilter" };
+            string[] units = { "dB", "" };
+            string[] tips =
+            {
+                "Maximum noise attenuation. Lower values preserve more natural background; 40 dB is the current default.",
+                "Optional post-filter. 0 disables it; small values up to 0.05 can suppress residual noise but may affect speech."
+            };
+            for (int i = 0; i < 2; ++i)
+            {
+                int top = 30 + i * 42;
+                LabelTS label = new LabelTS
+                {
+                    Name = "lbl" + names[i].Substring(2) + suffix,
+                    Text = labels[i],
+                    Location = new Point(12, top + 3),
+                    Size = new Size(138, 20)
+                };
+                NumericUpDownTS numeric = new NumericUpDownTS
+                {
+                    Name = names[i] + suffix,
+                    Location = new Point(155, top),
+                    Size = new Size(88, 20),
+                    Minimum = 0m,
+                    Maximum = i == 0 ? 60m : 0.05m,
+                    Increment = i == 0 ? 1m : 0.005m,
+                    DecimalPlaces = i == 0 ? 0 : 3,
+                    Value = i == 0 ? 40m : 0m,
+                    TinyStep = false
+                };
+                LabelTS unit = new LabelTS
+                {
+                    Name = "lbl" + names[i].Substring(2) + "Unit" + suffix,
+                    Text = units[i],
+                    Location = new Point(249, top + 3),
+                    Size = new Size(30, 20)
+                };
+                toolTip1.SetToolTip(label, tips[i]);
+                toolTip1.SetToolTip(numeric, tips[i]);
+                numeric.ValueChanged += NR7Control_ValueChanged;
+                nudNR7[receiver, i] = numeric;
+                group.Controls.Add(label);
+                group.Controls.Add(numeric);
+                group.Controls.Add(unit);
+            }
+            ButtonTS reset = new ButtonTS
+            {
+                Name = "btnNR7Defaults" + suffix,
+                Text = "Defaults",
+                Location = new Point(155, 126),
+                Size = new Size(88, 28)
+            };
+            reset.Click += delegate
+            {
+                nudNR7[receiver, 0].Value = 40m;
+                nudNR7[receiver, 1].Value = 0m;
+            };
+            group.Controls.Add(reset);
+            group.Controls.Add(new LabelTS
+            {
+                Name = "lblNR7Hint" + suffix,
+                Text = "Start at 40 dB / 0. Increase the post-filter gradually.",
+                Location = new Point(12, 170),
+                Size = new Size(318, 28)
+            });
+            return group;
+        }
+
+        private void NR7Control_ValueChanged(object sender, EventArgs e)
+        {
+            Control control = sender as Control;
+            if (control != null)
+                ApplyNR7Settings(control.Name.EndsWith("RX2", StringComparison.Ordinal) ? 1 : 0);
+        }
+
+        private void ApplyNR7Settings(int receiver)
+        {
+            if (nudNR7[receiver, 0] == null || nudNR7[receiver, 1] == null) return;
+            float attenuation = (float)nudNR7[receiver, 0].Value;
+            float beta = (float)nudNR7[receiver, 1].Value;
+            for (int subrx = 0; subrx < 2; ++subrx)
+            {
+                int channel = WDSP.id((uint)receiver, (uint)subrx);
+                if (channel >= 0) WDSP.SetRXADFNSettings(channel, attenuation, beta);
             }
         }
 
@@ -3046,6 +3167,8 @@ namespace Thetis
 
             setupNR4algorithm();
             ApplyAllNNRSettings();
+            ApplyNR7Settings(0);
+            ApplyNR7Settings(1);
             //
 
             // Transmit Tab
@@ -21661,7 +21784,8 @@ namespace Thetis
             PA_Tab,
             HWSET_Tab,
             OtherHW_PA_Tab,
-            NNR_Tab
+            NNR_Tab,
+            NR7_Tab
         }
         public void ShowSetupTab(SetupTab eTab)
         {
@@ -21689,6 +21813,13 @@ namespace Thetis
                 case SetupTab.NNR_Tab:
                     TabSetup.SelectedIndex = 3;
                     TabDSP.SelectedTab = tpDSPNNR;
+                    break;
+                case SetupTab.NR7_Tab:
+                    TabSetup.SelectedIndex = 3;
+                    if (TabDSP.TabPages.Contains(tpDSPNR7))
+                        TabDSP.SelectedTab = tpDSPNR7;
+                    else
+                        TabDSP.SelectedTab = tpDSPNNR;
                     break;
                 case SetupTab.NB_Tab:
                     TabSetup.SelectedIndex = 3;

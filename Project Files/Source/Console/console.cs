@@ -758,6 +758,7 @@ namespace Thetis
             LogTool.AddLogEntry("Initialising components...", "COMP");
 
             InitializeComponent();								// Windows Forms Generated Code
+            InitialiseNR7Menus();
             Common.DoubleBufferAll(this, true);
 
             InitialiseAndromedaMenus();
@@ -1491,7 +1492,7 @@ namespace Thetis
                 string dataPath = Directory.Exists(portableData)
                     ? portableData
                     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "OpenHPSDR", "Thetis-PY2ECM-2.10.4.1-Beta2");
+                        "OpenHPSDR", "Thetis-PY2ECM-2.10.4.1-Beta3");
                 Directory.CreateDirectory(dataPath);
                 result.Add("-datapath:" + dataPath);
             }
@@ -43858,6 +43859,9 @@ namespace Thetis
                         SelectNR(1, true, is_on ? 0 : 6);
                     }
                     break;
+                case "NR7 (DeepFilterNet3)":
+                    SelectNR(1, true, _nr_selected[0] == 7 ? 0 : 7);
+                    break;
                 case "ANF":
                     chkANF.Checked = !chkANF.Checked;
                     break;
@@ -43930,6 +43934,9 @@ namespace Thetis
                         bool is_on = _nr_selected[1] == 6;
                         SelectNR(2, true, is_on ? 0 : 6);
                     }
+                    break;
+                case "NR7 (DeepFilterNet3)":
+                    SelectNR(2, true, _nr_selected[1] == 7 ? 0 : 7);
                     break;
                 case "ANF":
                     chkRX2ANF.Checked = !chkRX2ANF.Checked;
@@ -44630,14 +44637,27 @@ namespace Thetis
             CWFWKeyer = chkCWFWKeyer.Checked;
         }
 
+        private ToolStripMenuItem privateNR7RX1;
+        private ToolStripMenuItem privateNR7RX2;
+
+        private void InitialiseNR7Menus()
+        {
+            privateNR7RX1 = new ToolStripMenuItem("NR7 (DeepFilterNet3)");
+            privateNR7RX1.Click += mnuDSP_Click;
+            dSPToolStripMenuItem.DropDownItems.Insert(
+                dSPToolStripMenuItem.DropDownItems.IndexOf(NR6ToolStripMenuItem) + 1, privateNR7RX1);
+            privateNR7RX2 = new ToolStripMenuItem("NR7 (DeepFilterNet3)");
+            privateNR7RX2.Click += mnuDSPRX2_Click;
+            dSPToolStripMenuItem1.DropDownItems.Insert(
+                dSPToolStripMenuItem1.DropDownItems.IndexOf(NR6ToolStripMenuItem_rx2) + 1, privateNR7RX2);
+        }
+
         private int[] _nr_selected = new int[]{ 0, 0 }; // the current NR for each rx
-        // NR7/NR8 from early WDSP 2.11 previews become NR5/NR6. The selected
-        // model family now follows the receive mode instead of adding UI modes.
+        // NR8 from early WDSP 2.11 previews becomes NR6. NR7 is DeepFilterNet3.
         private static int NormalizeNRSelection(int nr)
         {
-            if (nr == 7) return 5;
             if (nr == 8) return 6;
-            return Math.Max(0, Math.Min(6, nr));
+            return Math.Max(0, Math.Min(7, nr));
         }
         private int[,] _nr_selected_by_mode = new int[2, (int)DSPMode.LAST];
         private bool _nr_selected_by_mode_loaded = false;
@@ -45015,7 +45035,7 @@ namespace Thetis
             int old_nr = _nr_selected[rx - 1];
 
             _nr_selected[rx - 1] += 1;
-            if (_nr_selected[rx - 1] > 6) _nr_selected[rx - 1] = 0;
+            if (_nr_selected[rx - 1] > 7) _nr_selected[rx - 1] = 0;
 
             setupNR(rx, false);
             setupNR(rx, true);
@@ -45028,6 +45048,16 @@ namespace Thetis
             if (rx < 1 || rx > 2) return;
             if (nr < 0 || nr > 8) return;
             nr = NormalizeNRSelection(nr);
+
+            if (nr == 7 && (!System.IO.File.Exists(System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory, "models", "DeepFilterNet3_onnx.tar.gz")) ||
+                !System.IO.File.Exists(System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory, "deepfilter.dll"))))
+            {
+                MessageBox.Show("NR7 requires the DeepFilterNet3 model in the models folder.",
+                    "NR7 unavailable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             int old_nr = _nr_selected[rx - 1];
 
@@ -45056,24 +45086,32 @@ namespace Thetis
             // Every NR implementation is mutually exclusive. NNR is explicitly
             // stopped before selecting a legacy NR, and re-enabled for NNR models.
             rad.RXANNRRun = 0;
+            int nr = NormalizeNRSelection(_nr_selected[rx - 1]);
+            int dfnChannel = WDSP.id((uint)(rx - 1), (uint)(sub ? 1 : 0));
+            DSPMode dfnMode = nr_mode_for_rx(rx);
+            bool dfnVoice = dfnMode == DSPMode.LSB || dfnMode == DSPMode.USB ||
+                dfnMode == DSPMode.DSB ||
+                dfnMode == DSPMode.AM || dfnMode == DSPMode.SAM ||
+                dfnMode == DSPMode.AM_LSB || dfnMode == DSPMode.AM_USB;
+            if ((nr != 7 || !dfnVoice) && dfnChannel >= 0) WDSP.SetRXADFNRun(dfnChannel, 0);
 
             if (rx == 1)
             {
                 NR5ToolStripMenuItem.Checked = false;
                 NR6ToolStripMenuItem.Checked = false;
+                privateNR7RX1.Checked = false;
             }
             else
             {
                 NR5ToolStripMenuItem_rx2.Checked = false;
                 NR6ToolStripMenuItem_rx2.Checked = false;
+                privateNR7RX2.Checked = false;
             }
 
             nR2ToolStripMenuItem.Checked = false;
             NR2StripMenuItem2.Checked = false;
             cat_rx2_nr_status = 0;
             cat_rx2_nr2_status = 0;
-
-            int nr = NormalizeNRSelection(_nr_selected[rx - 1]);
 
             switch (nr)
             {
@@ -45107,6 +45145,61 @@ namespace Thetis
                             lblRX2NRLabel.Text = "---";
                             chkRX2NR.Checked = false;
                             break;
+                    }
+                    break;
+                case 7: // DeepFilterNet3; RX only, post-AGC, 48 kHz
+                    rad.RXANR4Run = 0;
+                    rad.RXANR3Run = 0;
+                    rad.RXANR2Run = 0;
+                    rad.RXANR1Run = 0;
+                    if (rx == 1)
+                    {
+                        NRToolStripMenuItem.Checked = false;
+                        NR2ToolStripMenuItem1.Checked = false;
+                        NR3ToolStripMenuItem.Checked = false;
+                        NR4ToolStripMenuItem.Checked = false;
+                    }
+                    else
+                    {
+                        nR2ToolStripMenuItem.Checked = false;
+                        NR2StripMenuItem2.Checked = false;
+                        NR3ToolStripMenuItem_rx2.Checked = false;
+                        NR4ToolStripMenuItem_rx2.Checked = false;
+                    }
+                    if (dfnVoice && dfnChannel >= 0)
+                    {
+                        // Paint the requested mode before the first model load
+                        // blocks this UI callback. Failure below restores OFF.
+                        if (rx == 1)
+                        {
+                            chkNR.Text = "NR7";
+                            chkNR.Checked = true;
+                            lblNRLabel.Text = "NR7";
+                            chkNR.Refresh();
+                        }
+                        else
+                        {
+                            chkRX2NR.Text = "NR7";
+                            chkRX2NR.Checked = true;
+                            lblRX2NRLabel.Text = "NR7";
+                            chkRX2NR.Refresh();
+                        }
+                    }
+                    bool dfnStarted = dfnVoice && dfnChannel >= 0 &&
+                        WDSP.SetRXADFNRun(dfnChannel, 1) != 0;
+                    if (rx == 1)
+                    {
+                        chkNR.Text = dfnStarted ? "NR7" : "NR";
+                        lblNRLabel.Text = dfnStarted ? "NR7" : "---";
+                        chkNR.Checked = dfnStarted;
+                        privateNR7RX1.Checked = dfnStarted;
+                    }
+                    else
+                    {
+                        chkRX2NR.Text = dfnStarted ? "NR7" : "NR";
+                        lblRX2NRLabel.Text = dfnStarted ? "NR7" : "---";
+                        chkRX2NR.Checked = dfnStarted;
+                        privateNR7RX2.Checked = dfnStarted;
                     }
                     break;
                 case 1: //nr1
@@ -46267,8 +46360,8 @@ namespace Thetis
         private void ShowSelectedNRSetupTab(int rx)
         {
             int nr = GetSelectedNR(rx);
-            SetupForm.ShowSetupTab(nr >= 5 && nr <= 8
-                ? Setup.SetupTab.NNR_Tab : Setup.SetupTab.NR_Tab);
+            SetupForm.ShowSetupTab(nr == 7 ? Setup.SetupTab.NR7_Tab :
+                nr >= 5 && nr <= 6 ? Setup.SetupTab.NNR_Tab : Setup.SetupTab.NR_Tab);
         }
 
         private void chkNB_MouseDown(object sender, MouseEventArgs e)

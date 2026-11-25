@@ -26,6 +26,7 @@ warren@pratt.one
 
 #include "comm.h"
 #include "profile.h"
+#include "dfnr.h"
 
 struct _rxa rxa[MAX_CHANNELS];
 
@@ -35,6 +36,7 @@ void create_rxa (int channel)
 	rxa[channel].inbuff  = (double *) malloc0 (1 * ch[channel].dsp_insize  * sizeof (complex));
 	rxa[channel].outbuff = (double *) malloc0 (1 * ch[channel].dsp_outsize * sizeof (complex));
 	rxa[channel].midbuff = (double *) malloc0 (2 * ch[channel].dsp_size    * sizeof (complex));
+	create_dfnr(channel, ch[channel].dsp_size, rxa[channel].midbuff, ch[channel].dsp_rate);
 
 	// shift to select a slice of spectrum
 	rxa[channel].shift.p = create_shift (
@@ -601,6 +603,7 @@ void destroy_rxa (int channel)
 	destroy_bandpass (rxa[channel].bp1.p);
 	destroy_meter (rxa[channel].agcmeter.p);
 	destroy_wcpagc (rxa[channel].agc.p);
+	destroy_dfnr(channel);
 	destroy_nnrbypass (rxa[channel].nnrbypass.p);
 	destroy_nnr (rxa[channel].nnr.p);
 	destroy_rnnr (rxa[channel].rnnr.p);
@@ -655,6 +658,7 @@ void flush_rxa (int channel)
 	flush_nnr         (rxa[channel].nnr.p        );
 	flush_nnrbypass   (rxa[channel].nnrbypass.p  );
 	flush_wcpagc      (rxa[channel].agc.p        );
+	flush_dfnr        (channel);
 	flush_meter       (rxa[channel].agcmeter.p   );
 	flush_bandpass    (rxa[channel].bp1.p        );
 	flush_siphon      (rxa[channel].sip1.p       );
@@ -714,6 +718,7 @@ void xrxa (int channel)
 	xbandpass (rxa[channel].bp1.p, 0);
 	xcbl (rxa[channel].cbl.p, 0);
 	xwcpagc (rxa[channel].agc.p);
+	xdfnr (channel);
 	wdsp_profile_add(channel, WDSP_PROFILE_RX_FILTER_AGC, profile_start);
 	profile_start = wdsp_profile_now();
 	xanf (rxa[channel].anf.p, 1);
@@ -768,6 +773,7 @@ void setOutputSamplerate_rxa (int channel)
 
 void setDSPSamplerate_rxa (int channel)
 {
+	reconfigure_dfnr(channel, ch[channel].dsp_size, rxa[channel].midbuff, ch[channel].dsp_rate);
 	// buffers
 	_aligned_free (rxa[channel].inbuff);
 	rxa[channel].inbuff = (double *)malloc0 (1 * ch[channel].dsp_insize  * sizeof(complex));
@@ -829,6 +835,7 @@ void setDSPBuffsize_rxa (int channel)
 	rxa[channel].inbuff = (double *)malloc0 (1 * ch[channel].dsp_insize  * sizeof(complex));
 	_aligned_free (rxa[channel].midbuff);
 	rxa[channel].midbuff = (double *)malloc0 (2 * ch[channel].dsp_size * sizeof(complex));
+	reconfigure_dfnr(channel, ch[channel].dsp_size, rxa[channel].midbuff, ch[channel].dsp_rate);
 	_aligned_free (rxa[channel].outbuff);
 	rxa[channel].outbuff = (double *)malloc0 (1 * ch[channel].dsp_outsize * sizeof(complex));
 	// shift
