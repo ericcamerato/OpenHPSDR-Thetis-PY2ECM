@@ -1479,6 +1479,23 @@ namespace Thetis
         // ======================================================
         // Main
         // ======================================================
+        private static bool CanUsePortableData(string path)
+        {
+            if (!Directory.Exists(path)) return false;
+            try
+            {
+                // An MSI installs under Program Files, where an ordinary user
+                // cannot write. Probe once at startup before selecting the DB.
+                string probe = Path.Combine(path, Path.GetRandomFileName());
+                using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None, 1, FileOptions.DeleteOnClose)) { }
+                return true;
+            }
+            catch (UnauthorizedAccessException) { return false; }
+            catch (IOException) { return false; }
+            catch (System.Security.SecurityException) { return false; }
+        }
+
         private static string[] AddDistributionDefaults(string[] args)
         {
             var result = new List<string>(args);
@@ -1489,7 +1506,7 @@ namespace Thetis
             if (!result.Any(a => a.StartsWith("-datapath:", StringComparison.OrdinalIgnoreCase)))
             {
                 string portableData = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "user-data");
-                string dataPath = Directory.Exists(portableData)
+                string dataPath = CanUsePortableData(portableData)
                     ? portableData
                     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                         "OpenHPSDR", "Thetis-PY2ECM-2.10.4.1-Beta3");
