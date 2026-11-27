@@ -180,7 +180,7 @@ PORT int SetRXADFNRun(int channel, int run)
             if (!dfnr_library) FreeLibrary(library);
             return 0;
         }
-        fresh = create(model, dfnr_settings_set[channel] ? dfnr_attenuation[channel] : 40.0f, 0);
+        fresh = create(model, dfnr_settings_set[channel] ? dfnr_attenuation[channel] : 18.0f, 0);
         if (!fresh) {
             if (!dfnr_library) FreeLibrary(library);
             return 0;

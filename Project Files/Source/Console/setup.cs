@@ -606,7 +606,7 @@ namespace Thetis
             string[] units = { "dB", "" };
             string[] tips =
             {
-                "Maximum noise attenuation. Lower values preserve more natural background; 40 dB is the current default.",
+                "Maximum noise attenuation. Lower values preserve more natural background; 18 dB is the default.",
                 "Optional post-filter. 0 disables it; small values up to 0.05 can suppress residual noise but may affect speech."
             };
             for (int i = 0; i < 2; ++i)
@@ -628,7 +628,7 @@ namespace Thetis
                     Maximum = i == 0 ? 60m : 0.05m,
                     Increment = i == 0 ? 1m : 0.005m,
                     DecimalPlaces = i == 0 ? 0 : 3,
-                    Value = i == 0 ? 40m : 0m,
+                    Value = i == 0 ? 18m : 0m,
                     TinyStep = false
                 };
                 LabelTS unit = new LabelTS
@@ -655,14 +655,14 @@ namespace Thetis
             };
             reset.Click += delegate
             {
-                nudNR7[receiver, 0].Value = 40m;
+                nudNR7[receiver, 0].Value = 18m;
                 nudNR7[receiver, 1].Value = 0m;
             };
             group.Controls.Add(reset);
             group.Controls.Add(new LabelTS
             {
                 Name = "lblNR7Hint" + suffix,
-                Text = "Start at 40 dB / 0. Increase the post-filter gradually.",
+                Text = "Start at 18 dB / 0. Increase the post-filter gradually.",
                 Location = new Point(12, 170),
                 Size = new Size(318, 28)
             });

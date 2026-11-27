@@ -4,7 +4,8 @@ THETIS PY2ECM 2.10.4.1 BETA 3 (x64)
 Beta 3 is based on PY2ECM Beta 2. The only functional addition is NR7,
 DeepFilterNet3 speech noise reduction for 48 kHz receive audio. It is
 available in voice modes; CW, digital and FM bypass it. The NR7 settings
-are in Setup > DSP > NR7. Transmit processing and the default four-DDC
+are in Setup > DSP > NR7. The default attenuation limit is 18 dB.
+Transmit processing and the default four-DDC
 configuration are unchanged.
 
 The optional one- and two-DDC modes inherited from Beta 2 are not
