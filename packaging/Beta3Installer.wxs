@@ -4,37 +4,55 @@
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" Description="Thetis PY2ECM 2.10.4.1 Beta 3 x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer Beta 3 is already installed." AllowSameVersionUpgrades="yes" Schedule="afterInstallInitialize" />
     <MediaTemplate EmbedCab="yes" />
+    <PropertyRef Id="WIXNETFX4RELEASEINSTALLED" />
+    <Property Id="WIX_IS_NETFRAMEWORK_480_OR_LATER_INSTALLED" Secure="yes" />
+    <SetProperty Id="WIX_IS_NETFRAMEWORK_480_OR_LATER_INSTALLED" Value="1" After="AppSearch">
+      WIXNETFX4RELEASEINSTALLED &gt;= "#528040"
+    </SetProperty>
+    <Condition Message="[ProductName] requires .NET Framework 4.8 or later.">
+      Installed OR WIX_IS_NETFRAMEWORK_480_OR_LATER_INSTALLED
+    </Condition>
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="Project Files\Source\Thetis-Installer\GNU_GENERAL_PUBLIC_LICENSE.rtf" />
+    <UIRef Id="WixUI_Mondo" />
+    <!-- Default display assets are ordinary installed files. The application
+         copies missing assets into each user's AppData on first launch. Do not
+         run interactive skin installers inside the MSI transaction. -->
     <Feature Id="MainFeature" Title="Thetis PY2ECM Beta 3" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="DesktopLink" />
       <ComponentRef Id="MenuLink" />
     </Feature>
+    <Feature Id="VC145Redist" Title="Visual C++ 14.5 Runtime" AllowAdvertise="no" Display="hidden" Level="1">
+      <MergeRef Id="VC145Redist" />
+    </Feature>
   </Product>
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
+      <Merge Id="VC145Redist" SourceFile="Project Files\Source\Thetis-Installer\Microsoft_VC145_CRT_x64.msm" DiskId="1" Language="0" />
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="OpenHPSDRFolder" Name="OpenHPSDR">
           <Directory Id="INSTALLFOLDER" Name="Thetis-PY2ECM" />
         </Directory>
       </Directory>
-      <Directory Id="CommonDesktopFolder" />
-      <Directory Id="CommonProgramsFolder">
+      <Directory Id="DesktopFolder" />
+      <Directory Id="ProgramMenuFolder">
         <Directory Id="MenuFolder" Name="Thetis PY2ECM" />
       </Directory>
     </Directory>
   </Fragment>
   <Fragment>
-    <DirectoryRef Id="CommonDesktopFolder">
+    <DirectoryRef Id="DesktopFolder">
       <Component Id="DesktopLink" Guid="69802C12-2B58-4615-9F2B-ED6E3574748E" Win64="yes">
         <Shortcut Id="DesktopShortcut" Name="Thetis PY2ECM" Description="Start Thetis PY2ECM" Target="[INSTALLFOLDER]Thetis.exe" WorkingDirectory="INSTALLFOLDER" />
-        <RegistryValue Root="HKLM" Key="Software\PY2ECM\Thetis" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\PY2ECM\Thetis" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
     <DirectoryRef Id="MenuFolder">
       <Component Id="MenuLink" Guid="CEF78344-3A9E-4FCF-AD16-DC1DEF018078" Win64="yes">
         <Shortcut Id="MenuShortcut" Name="Thetis PY2ECM" Target="[INSTALLFOLDER]Thetis.exe" WorkingDirectory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveMenuFolder" On="uninstall" />
-        <RegistryValue Root="HKLM" Key="Software\PY2ECM\Thetis" Name="MenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\PY2ECM\Thetis" Name="MenuShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
   </Fragment>

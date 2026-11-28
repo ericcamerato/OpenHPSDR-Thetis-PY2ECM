@@ -1516,6 +1516,49 @@ namespace Thetis
             return result.ToArray();
         }
 
+        private static void InstallMissingDisplayAssets(string source, string destination)
+        {
+            if (!Directory.Exists(source)) return;
+
+            foreach (string file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+            {
+                string relativePath = file.Substring(source.Length).TrimStart(Path.DirectorySeparatorChar);
+                string target = Path.Combine(destination, relativePath);
+                if (File.Exists(target)) continue; // Never replace a user's chosen skin.
+
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                File.Copy(file, target, false);
+            }
+        }
+
+        private static void EnsureBundledDisplayAssets()
+        {
+            // MSI assets live in Program Files. Provision each interactive user's
+            // profile on first launch, not from an elevated MSI custom action.
+            string sourceRoot = AppDomain.CurrentDomain.BaseDirectory;
+            string skinSource = Path.Combine(sourceRoot, "BundledSkins");
+            string meterSource = Path.Combine(sourceRoot, "BundledMeters");
+            if (!Directory.Exists(skinSource) && !Directory.Exists(meterSource)) return;
+
+            string userRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpenHPSDR");
+            string stamp = Path.Combine(userRoot, "PY2ECM-Beta3-DisplayAssets-v1.txt");
+            if (File.Exists(stamp)) return;
+
+            try
+            {
+                InstallMissingDisplayAssets(skinSource, Path.Combine(userRoot, "Skins"));
+                InstallMissingDisplayAssets(meterSource, Path.Combine(userRoot, "Meters"));
+                Directory.CreateDirectory(userRoot);
+                File.WriteAllText(stamp, "Default display assets installed for this user.");
+            }
+            catch (Exception ex)
+            {
+                // A missing optional skin must never abort receiver startup.
+                Trace.WriteLine("Unable to provision default display assets: " + ex);
+            }
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -1535,6 +1578,7 @@ namespace Thetis
             }
 
             args = AddDistributionDefaults(args);
+            EnsureBundledDisplayAssets();
 
             //[2.10.3.12]MW0LGE command line adaptor select
             if (Common.HasArg(args, "-adaptor"))

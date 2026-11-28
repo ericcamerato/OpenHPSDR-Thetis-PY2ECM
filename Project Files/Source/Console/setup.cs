@@ -105,7 +105,7 @@ namespace Thetis
         // WDSP 2.11 NNR controls are created here instead of in the generated
         // designer file to keep the PY2ECM changes small and merge-friendly.
         private readonly NumericUpDownTS[,] nudNNR = new NumericUpDownTS[2, 7];
-        private readonly NumericUpDownTS[,] nudNR7 = new NumericUpDownTS[2, 2];
+        private readonly NumericUpDownTS[,] nudNR7 = new NumericUpDownTS[2, 3];
         private TabPage tpDSPNR7;
         // Mode 0: all Classic 3D views; mode 1: all new 3D views.
         // Keep the existing control names so saved appearance settings still load.
@@ -599,17 +599,18 @@ namespace Thetis
                 Name = "grpNR7" + suffix,
                 Text = "NR7 " + suffix,
                 Location = new Point(left, 45),
-                Size = new Size(344, 210)
+                Size = new Size(344, 244)
             };
-            string[] labels = { "Attenuation limit", "Post-filter strength" };
-            string[] names = { "udNR7Attenuation", "udNR7PostFilter" };
-            string[] units = { "dB", "" };
+            string[] labels = { "Attenuation limit", "Post-filter strength", "Output gain" };
+            string[] names = { "udNR7Attenuation", "udNR7PostFilter", "udNR7OutputGain" };
+            string[] units = { "dB", "", "dB" };
             string[] tips =
             {
                 "Maximum noise attenuation. Lower values preserve more natural background; 18 dB is the default.",
-                "Optional post-filter. 0 disables it; small values up to 0.05 can suppress residual noise but may affect speech."
+                "Optional post-filter. 0 disables it; small values up to 0.05 can suppress residual noise but may affect speech.",
+                "Compensates NR7's lower perceived loudness. Reduce this value if strong signals sound distorted."
             };
-            for (int i = 0; i < 2; ++i)
+            for (int i = 0; i < 3; ++i)
             {
                 int top = 30 + i * 42;
                 LabelTS label = new LabelTS
@@ -624,11 +625,11 @@ namespace Thetis
                     Name = names[i] + suffix,
                     Location = new Point(155, top),
                     Size = new Size(88, 20),
-                    Minimum = 0m,
-                    Maximum = i == 0 ? 60m : 0.05m,
-                    Increment = i == 0 ? 1m : 0.005m,
-                    DecimalPlaces = i == 0 ? 0 : 3,
-                    Value = i == 0 ? 18m : 0m,
+                    Minimum = i == 2 ? -12m : 0m,
+                    Maximum = i == 0 ? 60m : i == 1 ? 0.05m : 18m,
+                    Increment = i == 1 ? 0.005m : 1m,
+                    DecimalPlaces = i == 1 ? 3 : 0,
+                    Value = i == 0 ? 18m : i == 1 ? 0m : 10m,
                     TinyStep = false
                 };
                 LabelTS unit = new LabelTS
@@ -650,20 +651,21 @@ namespace Thetis
             {
                 Name = "btnNR7Defaults" + suffix,
                 Text = "Defaults",
-                Location = new Point(155, 126),
+                Location = new Point(155, 165),
                 Size = new Size(88, 28)
             };
             reset.Click += delegate
             {
                 nudNR7[receiver, 0].Value = 18m;
                 nudNR7[receiver, 1].Value = 0m;
+                nudNR7[receiver, 2].Value = 10m;
             };
             group.Controls.Add(reset);
             group.Controls.Add(new LabelTS
             {
                 Name = "lblNR7Hint" + suffix,
-                Text = "Start at 18 dB / 0. Increase the post-filter gradually.",
-                Location = new Point(12, 170),
+                Text = "Start at +10 dB output gain; reduce it if strong signals distort.",
+                Location = new Point(12, 205),
                 Size = new Size(318, 28)
             });
             return group;
@@ -678,13 +680,19 @@ namespace Thetis
 
         private void ApplyNR7Settings(int receiver)
         {
-            if (nudNR7[receiver, 0] == null || nudNR7[receiver, 1] == null) return;
+            if (nudNR7[receiver, 0] == null || nudNR7[receiver, 1] == null ||
+                nudNR7[receiver, 2] == null) return;
             float attenuation = (float)nudNR7[receiver, 0].Value;
             float beta = (float)nudNR7[receiver, 1].Value;
+            float gainDb = (float)nudNR7[receiver, 2].Value;
             for (int subrx = 0; subrx < 2; ++subrx)
             {
                 int channel = WDSP.id((uint)receiver, (uint)subrx);
-                if (channel >= 0) WDSP.SetRXADFNSettings(channel, attenuation, beta);
+                if (channel >= 0)
+                {
+                    WDSP.SetRXADFNSettings(channel, attenuation, beta);
+                    WDSP.SetRXADFNOutputGain(channel, gainDb);
+                }
             }
         }
 

@@ -253,6 +253,9 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetRXADFNSettings", CallingConvention = CallingConvention.Cdecl)]
         public static extern int SetRXADFNSettings(int channel, float attenuation, float beta);
 
+        [DllImport("wdsp.dll", EntryPoint = "SetRXADFNOutputGain", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int SetRXADFNOutputGain(int channel, float gainDb);
+
         [DllImport("wdsp.dll", EntryPoint = "GetRXADFNAvailable", CallingConvention = CallingConvention.Cdecl)]
         public static extern int GetRXADFNAvailable(int channel);
 

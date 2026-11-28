@@ -2,6 +2,7 @@
  * loaded only when selected; normal RX and TX have no extra processing. */
 #include "comm.h"
 #include "dfnr.h"
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -25,6 +26,7 @@ typedef struct _dfnr_state {
     float input[480];
     float output[480];
     float queue[960];
+    float output_gain;
     int input_count;
     int queue_head;
     int queue_count;
@@ -34,6 +36,7 @@ static DFNR_STATE dfnr[MAX_CHANNELS];
 static HMODULE dfnr_library;
 static float dfnr_attenuation[MAX_CHANNELS];
 static float dfnr_beta[MAX_CHANNELS];
+static float dfnr_output_gain[MAX_CHANNELS];
 static int dfnr_settings_set[MAX_CHANNELS];
 
 static int dfnr_paths(char* dll, size_t dll_len, char* model, size_t model_len)
@@ -68,6 +71,23 @@ void create_dfnr(int channel, int size, double* buffer, int rate)
     p->size = size;
     p->buffer = buffer;
     p->rate = rate;
+    p->output_gain = dfnr_output_gain[channel] > 0.0f ? dfnr_output_gain[channel] : 1.0f;
+}
+
+/* Compensate only NR7's output level; other RX modes and TX are unchanged. */
+PORT int SetRXADFNOutputGain(int channel, float gain_db)
+{
+    float gain;
+    if (channel < 0 || channel >= MAX_CHANNELS ||
+        gain_db < -12.0f || gain_db > 18.0f) return 0;
+    gain = powf(10.0f, gain_db / 20.0f);
+    dfnr_output_gain[channel] = gain;
+    if (dfnr[channel].buffer) {
+        EnterCriticalSection(&ch[channel].csDSP);
+        dfnr[channel].output_gain = gain;
+        LeaveCriticalSection(&ch[channel].csDSP);
+    }
+    return 1;
 }
 
 /* RXA can replace midbuff without destroying the channel. Never retain its
@@ -231,7 +251,7 @@ void xdfnr(int channel)
             p->queue_head = (p->queue_head + 1) % 960;
             --p->queue_count;
         }
-        p->buffer[2 * i] = enhanced;
+        p->buffer[2 * i] = enhanced * p->output_gain;
         p->buffer[2 * i + 1] = 0.0;
     }
 }
